@@ -7,6 +7,15 @@ test/
 *.pcm
 *.root
 *.h5
+.Xauthority
+.bash_history
+.osg-container.sh
+.python_history
+.root_hist
+.viminfo
+*.old/
+*.png
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
