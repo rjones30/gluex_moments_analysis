@@ -31,19 +31,32 @@ def usage():
   print("  <reaction_tree> is the input tree written in uproot format (eg. treefile.root:treename)")
   print("  <event_count> is the number of accepted MC events to be summed in this subset")
   print("  <event_offset> is the multiplier of <event_count> skipped before the start of this subset")
+  sys.exit(1)
 
-if len(sys.argv) != 4:
-  usage()
+def usage2():
+  print("usage: >>> import buildMomentsMatrix as bmm")
+  print("       >>> bmm.open('etapi0_moments.root:etapi0_moments')")
+  print("       >>> events=range(100)")
+  print("       >>> M,Mvar = bmm.buildMomentsMatrix_sequential()")
+  print("       >>> M2,Mvar2 = bmm.buildMomentsMatrix_threaded()")
+  print("       >>> outfile = 'save_moments_matrix.h5')")
+  print("       >>> save_output(M, Mvar, len(events), events[0], outfile)")
 
-try:
-  intree_name = sys.argv[1]
-  event_count = int(sys.argv[2])
-  sequence_no = int(sys.argv[3])
-  skip_count = sequence_no * event_count
-except:
-  usage()
+if len(sys.argv) == 4:
+   try:
+      intree_name = sys.argv[1]
+      event_count = int(sys.argv[2])
+      sequence_no = int(sys.argv[3])
+      skip_count = sequence_no * event_count
+   except:
+      usage()
+else:
+   mPi0,mPi0 = 0,0
+   mEta,mEta_ = 0,0
+   mGJ,mGJ_ = 0,0
+   usage2()
 
-def open(intree_name=intree_name):
+def open(intree_name):
    intree = uproot.open(intree_name)
    global YmomGJ
    YmomGJ = intree["YmomGJ"].array()[:].to_numpy()
@@ -75,6 +88,7 @@ def buildMomentsMatrix_sequential(events, mPi0=mPi0, mEta=mEta, mGJ=mGJ, use_c_e
    """
    Single-threaded implementation, for small matrices and checks
    """
+   mPi0_, mEta_, mGJ_ = mPi0, mEta, mGJ
    M = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
    Mvar = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
    for iev in events:
@@ -85,23 +99,23 @@ def buildMomentsMatrix_sequential(events, mPi0=mPi0, mEta=mEta, mGJ=mGJ, use_c_e
          C_buildMomentsMatrix.add_event(Mvar2,
            [np.square(YmomPi0[iev]), np.square(YmomEta[iev]), np.square(YmomGJ[iev])],
            [np.square(YmomPi0_[iev]), np.square(YmomEta_[iev]), np.square(YmomGJ_[iev])])
-    else:
-       M_GJ = np.array([YmomGJ[iev][iGJ] * YmomGJ_[iev] for iGJ in range(mGJ)], dtype=float)
-       Mvar_GJ = np.array([np.square(YmomGJ[iev])[iGJ] * np.square(YmomGJ_[iev]) for iGJ in range(mGJ)], dtype=float)
-       for iPi0 in range(mPi0):
-          for iPi0_ in range(mPi0_):
-             M_Pi0 = YmomPi0[iev][iPi0] * YmomPi0_[iev][iPi0_]
-             for iEta in range(mEta):
-                m = iPi0 * mEta + iEta
-                for iEta_ in range(mEta_):
-                   M_Pi0_Eta = M_Pi0 * YmomEta[iev][iEta] * YmomEta_[iev][iEta_]
-                   m_ = iPi0_ *mEta_ + iEta_
-                   M[m * mGJ : (m+1) * mGJ, m_ * mGJ_ : (m_+1) * mGJ_] += M_Pi0_Eta * M_GJ
-                   Mvar[m * mGJ : (m+1) * mGJ, m_ * mGJ_ : (m_+1) * mGJ_] += M_Pi0_Eta**2 * Mvar_GJ
+      else:
+         M_GJ = np.array([YmomGJ[iev][iGJ] * YmomGJ_[iev] for iGJ in range(mGJ)], dtype=float)
+         Mvar_GJ = np.array([np.square(YmomGJ[iev])[iGJ] * np.square(YmomGJ_[iev]) for iGJ in range(mGJ)], dtype=float)
+         for iPi0 in range(mPi0):
+            for iPi0_ in range(mPi0_):
+               M_Pi0 = YmomPi0[iev][iPi0] * YmomPi0_[iev][iPi0_]
+               for iEta in range(mEta):
+                  m = iPi0 * mEta + iEta
+                  for iEta_ in range(mEta_):
+                     M_Pi0_Eta = M_Pi0 * YmomEta[iev][iEta] * YmomEta_[iev][iEta_]
+                     m_ = iPi0_ *mEta_ + iEta_
+                     M[m * mGJ : (m+1) * mGJ, m_ * mGJ_ : (m_+1) * mGJ_] += M_Pi0_Eta * M_GJ
+                     Mvar[m * mGJ : (m+1) * mGJ, m_ * mGJ_ : (m_+1) * mGJ_] += M_Pi0_Eta**2 * Mvar_GJ
       print(f"did event {iev}")
    return M, Mvar
 
-def buildMomentsMatrixSlice1(events, M, Mvar, iPi0):
+def buildMomentsMatrixSlice1(events, M, Mvar, iPi0, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_):
    """
    Builds a slice of M and Mvar, for a single Pi0 moment.
    """
@@ -110,14 +124,14 @@ def buildMomentsMatrixSlice1(events, M, Mvar, iPi0):
    M_slice = M[mstart:mend,:]
    Mvar_slice = Mvar[mstart:mend,:]
    for iev in events:
-      Ymom = [YmomPi0[iev][iPi0:iPi0+1], YmomEta[iev], YmomGJ[iev]]
-      Ymom_ = [YmomPi0_[iev], YmomEta_[iev], YmomGJ_[iev]]
-      Ysqr = [np.square(YmomPi0[iev][iPi0:iPi0+1]), np.square(YmomEta[iev]), np.square(YmomGJ[iev])]
-      Ysqr_ = [np.square(YmomPi0_[iev]), np.square(YmomEta_[iev]), np.square(YmomGJ_[iev])]
+      Ymom = [YmomPi0[iev][iPi0:iPi0+1], YmomEta[iev][:mEta], YmomGJ[iev][:mGJ]]
+      Ymom_ = [YmomPi0_[iev][:mPi0_], YmomEta_[iev][:mEta_], YmomGJ_[iev][:mGJ_]]
+      Ysqr = [np.square(YmomPi0[iev][iPi0:iPi0+1]), np.square(YmomEta[iev][:mEta]), np.square(YmomGJ[iev][:mGJ])]
+      Ysqr_ = [np.square(YmomPi0_[iev][:mPi0_]), np.square(YmomEta_[iev][:mEta_]), np.square(YmomGJ_[iev][:mGJ_])]
       C_buildMomentsMatrix.add_event(M_slice, Ymom, Ymom_)
       C_buildMomentsMatrix.add_event(Mvar_slice, Ysqr, Ysqr_)
 
-def buildMomentsMatrixSlice2(events, M, Mvar, iPi0, iEta):
+def buildMomentsMatrixSlice2(events, M, Mvar, iPi0, iEta, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_):
    """
    Builds a smaller slice of M and Mvar, for a single Pi0,Eta moment pair.
    """
@@ -126,10 +140,10 @@ def buildMomentsMatrixSlice2(events, M, Mvar, iPi0, iEta):
    M_slice = M[mstart:mend,:]
    Mvar_slice = Mvar[mstart:mend,:]
    for iev in events:
-      Ymom = [YmomPi0[iev][iPi0:iPi0+1], YmomEta[iev][iEta:iEta+1], YmomGJ[iev]]
-      Ymom_ = [YmomPi0_[iev], YmomEta_[iev], YmomGJ_[iev]]
-      Ysqr = [np.square(YmomPi0[iev][iPi0:iPi0+1]), np.square(YmomEta[iev][iEta:iEta+1]), np.square(YmomGJ[iev])]
-      Ysqr_ = [np.square(YmomPi0_[iev]), np.square(YmomEta_[iev]), np.square(YmomGJ_[iev])]
+      Ymom = [YmomPi0[iev][iPi0:iPi0+1], YmomEta[iev][iEta:iEta+1], YmomGJ[iev][:mGJ]]
+      Ymom_ = [YmomPi0_[iev][:mPi0_], YmomEta_[iev][:mEta_], YmomGJ_[iev][:mGJ_]]
+      Ysqr = [np.square(YmomPi0[iev][iPi0:iPi0+1]), np.square(YmomEta[iev][iEta:iEta+1]), np.square(YmomGJ[iev][:mGJ])]
+      Ysqr_ = [np.square(YmomPi0_[iev][:mPi0_]), np.square(YmomEta_[iev][:mEta_]), np.square(YmomGJ_[iev][:mGJ_])]
       C_buildMomentsMatrix.add_event(M_slice, Ymom, Ymom_)
       C_buildMomentsMatrix.add_event(Mvar_slice, Ysqr, Ysqr_)
 
@@ -137,6 +151,7 @@ def buildMomentsMatrix_threaded(events, mPi0=mPi0, mEta=mEta, mGJ=mGJ, threading
    """
    Multi-threaded implementation, for large matrices
    """
+   mPi0_, mEta_, mGJ_ = mPi0, mEta, mGJ
    M = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
    Mvar = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
 
@@ -144,13 +159,15 @@ def buildMomentsMatrix_threaded(events, mPi0=mPi0, mEta=mEta, mGJ=mGJ, threading
    threads = []
    if threading_split_level == 1:
       for iPi0 in range(mPi0):
-         t = threading.Thread(target=buildMomentsMatrixSlice1, args=(iPi0,))
+         args = (events, M, Mvar, iPi0, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_)
+         t = threading.Thread(target=buildMomentsMatrixSlice1, args=args)
          threads.append(t)
          t.start()
    else:
       for iPi0 in range(mPi0):
          for iEta in range(mEta):
-            t = threading.Thread(target=buildMomentsMatrixSlice2, args=(iPi0, iEta))
+            args = (events, M, Mvar, iPi0, iEta, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_)
+            t = threading.Thread(target=buildMomentsMatrixSlice2, args=args)
             threads.append(t)
             t.start()
    print("threads joining")
@@ -172,13 +189,12 @@ if len(sys.argv) == 4:
       print("error in buildMomentsMatrix.py - skip count >= number of acceptence MC events available")
       print(skip_count, ">=", len(YmomGJ))
       usage()
-      sys.exit(1)
    elif skip_count + event_count > len(YmomGJ):
       event_count = len(YmomGJ) - skip_count
       print("warning in buildMomentsMatrix.py - event_count reduced to number of acceptence MC events available")
       print(event_count, "remaining events in the accepted MC sample")
 
-   intree = open(intree_name=intree_name)
+   intree = open(intree_name)
    events = range(skip_count, skip_count + event_count)
    M,Mvar = buildMomentsMatrix_threaded(events)
    outfile = "acceptance_moments_{0}_{1}.h5".format(event_count, sequence_no)
