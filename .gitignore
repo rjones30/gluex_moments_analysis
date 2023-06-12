@@ -1,3 +1,13 @@
+*.log
+log.d/
+test/
+*.o
+*.so
+*.d
+*.pcm
+*.root
+*.h5
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

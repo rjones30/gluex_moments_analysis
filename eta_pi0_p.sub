@@ -1,0 +1,30 @@
+# Richard Jones
+# March 14, 2023
+#
+executable = scripts/osg-container.sh
+output = log.d/stdout.$(CLUSTER).$(PROCESS)
+error = log.d/stderr.$(CLUSTER).$(PROCESS)
+log = eta_pi0_p.log
+notification = never
+universe = vanilla
+should_transfer_files = yes
+#x509userproxy=/tmp/x509up_u7896
+transfer_input_files = scripts/workscript.sh,config/hd_recon.config,/tmp/x509up_u7896
+WhenToTransferOutput = ON_EXIT
+on_exit_hold = (ExitBySignal==False)&&(ExitCode!=0)
+on_exit_remove = (ExitBySignal==False)&&(ExitCode==0)
+Requirements = (HAS_SINGULARITY==true)&&(HAS_CVMFS_oasis_opensciencegrid_org==true)&&(HAS_CVMFS_singularity_opensciencegrid_org==true)
++SingularityImage = "/cvmfs/singularity.opensciencegrid.org/rjones30/gluex:latest"
+arguments = ./workscript.sh eta_pi0_p $(PROCESS) 0
+RequestMemory = 3800
+RequestDisk = 1000000
+
+#universe = grid
+#grid_resource = condor cn410.storrs.hpc.uconn.edu cn410.storrs.hpc.uconn.edu:9619
+#+remote_JobUniverse = 5
+#+xcount = 16
+#+maxMemory = 16000
+#+maxDisk = 100000000
+#+remote_ShouldTransferFiles = "YES"
+#+remote_WhenToTransferOutput = "ON_EXIT"
+queue 1000

@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+#
+# buildMomentsMatrix.py - reads from a ReactionFilter containing the selected
+#                         events from analysis of a Monte Carlo signal sample
+#                         with all angles generated uniform in CM angles, saved
+#                         as a flat tree with the moments functions computed on
+#                         the generated (with trailing underscores) as well as
+#                         the reconstructed angles (without trailing underscores)
+#                         of the final state by a special DSelector for the given
+#                         reaction, eg. see DSelector_etapi0_moments.[Ch]. A
+#                         subset of the full count of MC events is read in from
+#                         from the input ROOT tree, and the square M matrix for
+#                         this subset of the event sum is saved in hdf5 files.
+#
+# author: richard.t.jones at uconn.edu
+# version: june 7, 2023
+
+use_c_extension_library = True
+threading_split_level = 1
+
+import uproot
+import numpy as np
+import awkward as ak
+import C_buildMomentsMatrix
+import threading
+import h5py
+import sys
+
+def usage():
+  print("usage: buildMomentsMatrix.py <reaction_tree> <event_count> <event_offset>")
+  print("  <reaction_tree> is the input tree written in uproot format (eg. treefile.root:treename)")
+  print("  <event_count> is the number of accepted MC events to be summed in this subset")
+  print("  <event_offset> is the multiplier of <event_count> skipped before the start of this subset")
+  sys.exit(1)
+
+if len(sys.argv) != 4:
+  usage()
+
+try:
+  intree_name = sys.argv[1]
+  event_count = int(sys.argv[2])
+  sequence_no = int(sys.argv[3])
+  skip_count = sequence_no * event_count
+except:
+  usage()
+
+intree = uproot.open(intree_name)
+
+YmomGJ = intree["YmomGJ"].array()[:].to_numpy()
+YmomGJ_ = intree["YmomGJ_"].array()[:].to_numpy()
+YmomEta = intree["YmomEta"].array()[:].to_numpy()
+YmomEta_ = intree["YmomEta_"].array()[:].to_numpy()
+YmomPi0 = intree["YmomPi0"].array()[:].to_numpy()
+YmomPi0_ = intree["YmomPi0_"].array()[:].to_numpy()
+
+if skip_count >= len(YmomGJ):
+  print("error in buildMomentsMatrix.py - skip count >= number of acceptence MC events available")
+  print(skip_count, ">=", len(YmomGJ))
+  usage()
+elif skip_count + event_count > len(YmomGJ):
+  event_count = len(YmomGJ) - skip_count
+  print("warning in buildMomentsMatrix.py - event_count reduced to number of acceptence MC events available")
+  print(event_count, "remaining events in the accepted MC sample")
+
+events = range(skip_count, skip_count + event_count)
+
+mGJ = YmomGJ[0].shape[0]
+mGJ_ = YmomGJ_[0].shape[0]
+mEta = YmomEta[0].shape[0]
+mEta_ = YmomEta_[0].shape[0]
+mPi0 = YmomPi0[0].shape[0]
+mPi0_ = YmomPi0_[0].shape[0]
+
+M = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
+Mvar = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
+
+def buildMomentsMatrixSlice1(iPi0):
+  mstart = iPi0 * mEta * mGJ
+  mend = mstart + mEta * mGJ
+  M_slice = M[mstart:mend,:]
+  Mvar_slice = Mvar[mstart:mend,:]
+  for iev in events:
+    Ymom = [YmomPi0[iev][iPi0:iPi0+1], YmomEta[iev], YmomGJ[iev]]
+    Ymom_ = [YmomPi0_[iev], YmomEta_[iev], YmomGJ_[iev]]
+    Ysqr = [np.square(YmomPi0[iev][iPi0:iPi0+1]), np.square(YmomEta[iev]), np.square(YmomGJ[iev])]
+    Ysqr_ = [np.square(YmomPi0_[iev]), np.square(YmomEta_[iev]), np.square(YmomGJ_[iev])]
+    C_buildMomentsMatrix.add_event(M_slice, Ymom, Ymom_)
+    C_buildMomentsMatrix.add_event(Mvar_slice, Ysqr, Ysqr_)
+
+def buildMomentsMatrixSlice2(iPi0, iEta):
+  mstart = (iPi0 * mEta + iEta) * mGJ
+  mend = mstart + mGJ
+  M_slice = M[mstart:mend,:]
+  Mvar_slice = Mvar[mstart:mend,:]
+  for iev in events:
+    Ymom = [YmomPi0[iev][iPi0:iPi0+1], YmomEta[iev][iEta:iEta+1], YmomGJ[iev]]
+    Ymom_ = [YmomPi0_[iev], YmomEta_[iev], YmomGJ_[iev]]
+    Ysqr = [np.square(YmomPi0[iev][iPi0:iPi0+1]), np.square(YmomEta[iev][iEta:iEta+1]), np.square(YmomGJ[iev])]
+    Ysqr_ = [np.square(YmomPi0_[iev]), np.square(YmomEta_[iev]), np.square(YmomGJ_[iev])]
+    C_buildMomentsMatrix.add_event(M_slice, Ymom, Ymom_)
+    C_buildMomentsMatrix.add_event(Mvar_slice, Ysqr, Ysqr_)
+
+print("starting threads")
+threads = []
+
+if threading_split_level == 1:
+  for iPi0 in range(mPi0):
+    t = threading.Thread(target=buildMomentsMatrixSlice1, args=(iPi0,))
+    threads.append(t)
+    t.start()
+else:
+  for iPi0 in range(mPi0):
+    for iEta in range(mEta):
+      t = threading.Thread(target=buildMomentsMatrixSlice2, args=(iPi0, iEta))
+      threads.append(t)
+      t.start()
+
+print("threads joining")
+for t in threads:
+   t.join()
+print("threads joined")
+
+""" Single-threaded implementation, for checking
+
+M2 = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
+Mvar2 = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
+for iev in events:
+  if use_c_extension_library:
+    C_buildMomentsMatrix.add_event(M2, [YmomPi0[iev], YmomEta[iev], YmomGJ[iev]],
+                                       [YmomPi0_[iev], YmomEta_[iev], YmomGJ_[iev]])
+    C_buildMomentsMatrix.add_event(Mvar2, [np.square(YmomPi0[iev]), np.square(YmomEta[iev]), np.square(YmomGJ[iev])],
+                                          [np.square(YmomPi0_[iev]), np.square(YmomEta_[iev]), np.square(YmomGJ_[iev])])
+  else:
+    M_GJ = np.array([YmomGJ[iev][iGJ] * YmomGJ_[iev] for iGJ in range(mGJ)], dtype=float)
+    Mvar_GJ = np.array([np.square(YmomGJ[iev])[iGJ] * np.square(YmomGJ_[iev]) for iGJ in range(mGJ)], dtype=float)
+    for iPi0 in range(mPi0):
+      for iPi0_ in range(mPi0_):
+        M_Pi0 = YmomPi0[iev][iPi0] * YmomPi0_[iev][iPi0_]
+        for iEta in range(mEta):
+          m = iPi0 * mEta + iEta
+          for iEta_ in range(mEta_):
+            M_Pi0_Eta = M_Pi0 * YmomEta[iev][iEta] * YmomEta_[iev][iEta_]
+            m_ = iPi0_ *mEta_ + iEta_
+            M2[m * mGJ : (m+1) * mGJ, m_ * mGJ_ : (m_+1) * mGJ_] += M_Pi0_Eta * M_GJ
+            Mvar2[m * mGJ : (m+1) * mGJ, m_ * mGJ_ : (m_+1) * mGJ_] += M_Pi0_Eta**2 * Mvar_GJ
+  print(f"did event {iev}")
+  if iev == 10:
+    break
+
+print("matrix M is", M)
+print("matrix M2 is", M2)
+print("matrix Mvar is", Mvar)
+print("matrix Mvar2 is", Mvar2)
+"""
+
+if True:
+  h5out = h5py.File("acceptance_moments_{0}_{1}.h5".format(event_count, sequence_no), "w")
+  h5out.create_dataset("Moments", data=M)
+  h5out.create_dataset("Moments_variance", data=Mvar)
+  h5out.create_dataset("accepted_subset", data=event_count)
+  h5out.create_dataset("skipped_accepted", data=skip_count)
+  h5out.close()
