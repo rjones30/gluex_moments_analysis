@@ -6,6 +6,7 @@ test/
 *.d
 *.pcm
 *.root
+*.hddm
 *.h5
 .Xauthority
 .bash_history
@@ -15,7 +16,7 @@ test/
 .viminfo
 *.old/
 *.png
-
+src/generated_moments
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
