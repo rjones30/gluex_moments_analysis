@@ -17,18 +17,18 @@ import threading
 import scipy.linalg
 
 def usage():
-  print("usage: analyzeMomentsMatrix.py <moments_sum.h5>")
-  print("  analyzeMomentsMatrix.open(\"filename.h5\")", end='')
+  print("usage: >>> import analyzeMomentsMatrix.py as ana")
+  print("  >>> ana.open(\"filename.h5\")", end='')
   print("   - open acceptance matrix sum file filename.h5 for analysis")
-  print("  analyzeMomentsMatrix.histogram_M_diagonal()", end='')
+  print("  >>> ana.histogram_M_diagonal()", end='')
   print("   - return a TH1D of the diagonal elements of M with errors")
-  print("  analyzeMomentsMatrix.histogram_M_diagonal_GJ0()", end='')
+  print("  >>> ana.histogram_M_diagonal_GJ0()", end='')
   print("   - return a TH1D of the diagonal elements of M with L_GJ=0")
-  print("  analyzeMomentsMatrix.histogram_M_diagonal_GJ0_Eta0()", end='')
+  print("  >>> ana.histogram_M_diagonal_GJ0_Eta0()", end='')
   print("   - return a TH1D of the diagonal elements of M with L_GJ=0,LEta=0")
-  print("  analyzeMomentsMatrix.histogram_M_offdiagonal", end='')
+  print("  >>> ana.histogram_M_offdiagonal", end='')
   print("   - return a TH1D of the normalized off-diagonal elements of M")
-  print("  analyzeMomentsMatrix.do_svd()", end='')
+  print("  >>> ana.do_svd()", end='')
   print("   - perform the SVD of M, return (w,v) where w is a vector", end='')
   print(" of eigenvalues and v is a matrix with eigenvectors as columns")
 
@@ -41,12 +41,15 @@ def open(h5input):
   global f5
   global M
   global Mvar
-  global events
   f5 = h5py.File(h5input, 'r')
   M = f5['Moments']
   Mvar = f5['Moments_variance']
-  events = f5['accepted_subsets'][:,:]
-  return 0
+  h5inputs[0] = f5
+  try:
+    accepted_subset = f5['accepted_subset'][()]
+  except:
+    accepted_subset = 0
+  return accepted_subset
 
 def histogram_M_diagonal(h5input=0):
   if not h5input in h5inputs:
@@ -181,11 +184,54 @@ def histogram_M_offdiagonal(h5input=0):
     hEbelowdiag.Add(hEbelow[i])
   return (hMabovediag,hMbelowdiag,hEabovediag,hEbelowdiag)
 
+def histogram_offdiagonal(name, M, Mvar):
+  hMabovediag = ROOT.TH1D(f"hMabovediag{name}", "M above-diagonal elements normalized to diagonal", 10000,-0.1, 0.1)
+  hMbelowdiag = ROOT.TH1D(f"hMbelowdiag{name}", "M below-diagonal elements normalized to diagonal", 10000,-0.1, 0.1)
+  hEabovediag = ROOT.TH1D(f"hEabovediag{name}", "M above-diagonal errors normalized to diagonal", 10000,-0.1, 0.1)
+  hEbelowdiag = ROOT.TH1D(f"hEbelowdiag{name}", "M below-diagonal errors normalized to diagonal", 10000,-0.1, 0.1)
+  hMabovediag.GetXaxis().SetTitle("normalized M matrix element")
+  hMabovediag.GetYaxis().SetTitle("moments")
+  hMbelowdiag.GetXaxis().SetTitle("normalized M matrix element")
+  hMbelowdiag.GetYaxis().SetTitle("moments")
+  hEabovediag.GetXaxis().SetTitle("normalized M matrix errors")
+  hEabovediag.GetYaxis().SetTitle("moments")
+  hEbelowdiag.GetXaxis().SetTitle("normalized M matrix errors")
+  hEbelowdiag.GetYaxis().SetTitle("moments")
+  mdim = M.shape[0]
+  for i in range(mdim):
+    for j in range(i):
+      hMbelowdiag.Fill(M[i,j] / (M[i,i] * M[j,j])**0.5)
+      hEbelowdiag.Fill((Mvar[i,j] / (M[i,i] * M[j,j]))**0.5)
+    for j in range(i+1,mdim):
+      hMabovediag.Fill(M[i,j] / (M[i,i] * M[j,j])**0.5)
+      hEbelowdiag.Fill((Mvar[i,j] / (M[i,i] * M[j,j]))**0.5)
+  return (hMabovediag, hMbelowdiag, hEabovediag, hEbelowdiag)
+
 def do_svd(h5input=0, lower=True):
+  accepted_subset = 0
   if not h5input in h5inputs:
     try:
-      h5inputs[open(h5input)] = 1
+      accepted_subset = open(h5input)
+      h5inputs[0] = 1
     except:
       print("unable to open input moments file", h5input)
       return 0
-  return scipy.linalg.eigh(M, lower=lower)
+  return scipy.linalg.eigh(M, lower=lower), accepted_subset
+
+def histogram_eigenvalues(name, title, v, normfactor):
+  ndim = len(v)
+  h = ROOT.TH1D(name, title, ndim, 0, ndim)
+  for i in range(ndim):
+    h.SetBinContent(ndim - i, v[i] * normfactor)
+  h.GetXaxis().SetTitle("eigenvalue index")
+  h.GetYaxis().SetTitle("acceptance eigenvalue")
+  return h
+
+def list_inputs():
+  tmlist = {'all': "etapi0_moments_all.h5"}
+  for tlim in ("t(0,0.2)", "t(0.2,0.5)", "t(0.5,1)"):
+    for mlim in ("m(1,1.2)", "m(1.2,1.4)", "m(1.4,1.6)", "m(1.6,1.8)", "m(1.8,2.0)"):
+      tmlist[tlim+mlim] = f"etapi0_moments_{mlim}_{tlim}.h5"
+  return tmlist
+
+def 
