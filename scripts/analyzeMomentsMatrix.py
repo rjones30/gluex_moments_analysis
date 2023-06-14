@@ -204,7 +204,7 @@ def histogram_offdiagonal(name, M, Mvar):
       hEbelowdiag.Fill((Mvar[i,j] / (M[i,i] * M[j,j]))**0.5)
     for j in range(i+1,mdim):
       hMabovediag.Fill(M[i,j] / (M[i,i] * M[j,j])**0.5)
-      hEbelowdiag.Fill((Mvar[i,j] / (M[i,i] * M[j,j]))**0.5)
+      hEabovediag.Fill((Mvar[i,j] / (M[i,i] * M[j,j]))**0.5)
   return (hMabovediag, hMbelowdiag, hEabovediag, hEbelowdiag)
 
 def do_svd(h5input=0, lower=True):
@@ -218,20 +218,46 @@ def do_svd(h5input=0, lower=True):
       return 0
   return scipy.linalg.eigh(M, lower=lower), accepted_subset
 
-def histogram_eigenvalues(name, title, v, normfactor):
-  ndim = len(v)
+def histogram_eigenvalues(name, title, w, normfactor=1):
+  ndim = len(w)
   h = ROOT.TH1D(name, title, ndim, 0, ndim)
   for i in range(ndim):
-    h.SetBinContent(ndim - i, v[i] * normfactor)
+    h.SetBinContent(ndim - i, w[i] * normfactor)
   h.GetXaxis().SetTitle("eigenvalue index")
   h.GetYaxis().SetTitle("acceptance eigenvalue")
   return h
 
-def list_inputs():
+def list_boxes():
   tmlist = {'all': "etapi0_moments_all.h5"}
-  for tlim in ("t(0,0.2)", "t(0.2,0.5)", "t(0.5,1)"):
-    for mlim in ("m(1,1.2)", "m(1.2,1.4)", "m(1.4,1.6)", "m(1.6,1.8)", "m(1.8,2.0)"):
+  for tlim in ("t(0.0,0.2)", "t(0.2,0.5)", "t(0.5,1.0)"):
+    for mlim in ("m(1.0,1.2)", "m(1.2,1.4)", "m(1.4,1.6)", "m(1.6,1.8)", "m(1.8,2.0)"):
       tmlist[tlim+mlim] = f"etapi0_moments_{mlim}_{tlim}.h5"
   return tmlist
 
-def 
+def find_all_eigenvalues(half='lower'):
+  """
+  Argument half can be 'lower', 'upper', or 'sym'.
+  """
+  boxes = list_boxes()
+  h = {}
+  w = {}
+  v = {}
+  M = {}
+  Mvar = {}
+  for box in boxes:
+    h5box = h5py.File(boxes[box], 'r')
+    print(box, h5box['generated_subset'][()])
+    normfactor = (4 * math.pi)**3 / h5box['generated_subset'][()]
+    M[box] = h5box['Moments'][:] * normfactor
+    Mvar[box] = h5box['Moments_variance'][:] * normfactor
+    if half == 'lower':
+       svd = scipy.linalg.eigh(M[box], lower=True)
+    elif half == 'upper':
+       svd = scipy.linalg.eigh(M[box], lower=False)
+    else:
+       M[box] = (M[box] + np.transpose(M[box])) / 2
+       svd = scipy.linalg.eigh(M[box])
+    w[box] = svd[0]
+    v[box] = svd[1]
+    h[box] = histogram_eigenvalues('heig_' + box, "eigenvalues for bin " + box,  w[box])
+  return h,M,Mvar,w,v

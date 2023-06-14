@@ -36,7 +36,8 @@ def usage():
 def usage2():
   print("usage: >>> import buildMomentsMatrix as bmm")
   print("       >>> bmm.open('etapi0_moments.root:etapi0_moments')")
-  print("       >>> events=select_events(massPi0Eta_limits=(1.2,1.5), abst_limits=(0,0.2))")
+  print("       >>> events=select_events_accepted(massPi0Eta_limits=(1.2,1.5), abst_limits=(0,0.2))")
+  print("       >>> events=select_events_generated(massPi0Eta_limits=(1.2,1.5), abst_limits=(0,0.2))")
   print("       >>> M,Mvar = bmm.buildMomentsMatrix_sequential()")
   print("       >>> M2,Mvar2 = bmm.buildMomentsMatrix_threaded()")
   print("       >>> outfile = 'save_moments_matrix.h5')")
@@ -88,9 +89,9 @@ def open(intree_name):
    mPi0_ = YmomPi0_[0].shape[0]
    return intree
 
-def select_events(massEtaPi0_limits=(0,99), abst_limits=(0,99)):
+def select_events_accepted(massEtaPi0_limits=(0,99), abst_limits=(0,99)):
    """
-   Select a subset of events according to the specified ranges
+   Select a subset of accepted events according to the specified ranges
    in massEtaPi0 and abst.
    """
    events = []
@@ -98,6 +99,26 @@ def select_events(massEtaPi0_limits=(0,99), abst_limits=(0,99)):
       if massEtaPi0[i] > massEtaPi0_limits[0] and massEtaPi0[i] < massEtaPi0_limits[1]:
          if abst[i] > abst_limits[0] and abst[i] < abst_limits[1]:
             events.append(i)
+   return events
+
+def select_events_generated(massEtaPi0_limits=(0,99), abst_limits=(0,99)):
+   """
+   Select a subset of generated events according to the specified ranges
+   in massEtaPi0 and abst.
+   """
+   genmoments = uproot.open("../generated_moments.root:etapi0_moments")
+   massEtaPi0 = genmoments["massEtaPi0"].array()[:].to_numpy()
+   abst = genmoments["abst"].array()[:].to_numpy()
+   events = []
+   for i in range(len(massEtaPi0)):
+      if massEtaPi0[i] > massEtaPi0_limits[0] and massEtaPi0[i] < massEtaPi0_limits[1]:
+         if abst[i] > abst_limits[0] and abst[i] < abst_limits[1]:
+            events.append(i)
+   mofile = "../etapi0_moments_m({0:3.1f},{1:3.1f})_t({2:3.1f},{3:3.1f}).h5".format(
+            massEtaPi0_limits[0], massEtaPi0_limits[1], abst_limits[0], abst_limits[1])
+   with h5py.File(mofile, 'a') as mofile5:
+      if not 'generated_subset' in mofile5:
+         mofile5.create_dataset('generated_subset', data=len(events))
    return events
 
 def buildMomentsMatrix_sequential(events, mPi0=mPi0, mEta=mEta, mGJ=mGJ, use_c_extension_library=False):
