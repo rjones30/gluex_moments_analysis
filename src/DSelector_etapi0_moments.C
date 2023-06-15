@@ -662,11 +662,21 @@ void DSelector_etapi0_moments::Finalize(void)
 
 double DSelector_etapi0_moments::angular_moment(int L, int M, double theta, double phi) const
 {
+	// These are the real-valued spherical harmonics, Condon and Shortley convention
+
+#define SQRT2 1.4142135623730951
+
 	double dlm = ROOT::Math::sph_legendre(L, abs(M), theta);
 	if (M < 0)
-		return dlm * sin(-M * phi);
+	    if (M % 2 == 0)
+		return sqrt2 * dlm * sin(-M * phi);
+	    else
+		return -sqrt2 * dlm * sin(-M * phi);
 	else if (M > 0)
-		return dlm * cos(M * phi);
+	    if (M % 2 == 0)
+		return sqrt2 * dlm * cos(M * phi);
+	    else
+		return -sqrt2 * dlm * cos(M * phi);
 	else
 		return dlm;
 }
