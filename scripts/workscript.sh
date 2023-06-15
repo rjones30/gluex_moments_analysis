@@ -137,7 +137,7 @@ export JANA_GEOMETRY_URL="ccdb://GEOMETRY/main_HDDS.xml"
 export JANA_CALIB_CONTEXT="variation=mc"
 #export JANA_CALIB_CONTEXT="variation=fdcwires_test"
 
-if [ "$simType" = "g4" -o "$simType" = "g4t" -o "$simType" = "eta_pi0_p" ]; then
+if [ "$simType" = "g4" -o "$simType" = "g4t" -o "$simType" = "eta_pi0_p" -o "$simType" ="eta_pi0_p_x10" ]; then
     simApp=hdgeant4
     cat setup > sim.sh
     echo "which hdgeant4" >> sim.sh

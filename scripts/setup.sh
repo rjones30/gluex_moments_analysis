@@ -1,4 +1,6 @@
 # add pointers to Geant4 libraries
+export HDF5ROOT=/cvmfs/oasis.opensciencegrid.org/gluex/hdf5-1.12.0
+export BMS_OSNAME=Linux_CentOS7-x86_64-gcc4.8.5
 export G4ROOT=/cvmfs/oasis.opensciencegrid.org/gluex/geant4.10.04.p02/x86_64
 export GEANT4PY=$G4ROOT/src/environments/g4py
 export G4WORKDIR=/cvmfs/oasis.opensciencegrid.org/gluex/HDGeant4/jlab
