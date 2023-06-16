@@ -13,11 +13,11 @@ runNo=71000
 nthreads=1
 nevents=10000
 
-xrootdserver="nod26.phys.uconn.edu"
+xrootdserver="cn440.storrs.hpc.uconn.edu"
 xrootdURL="root://$xrootdserver"
-remotepath="/Gluex/simulation/moments-6-2023"
-gsiftpURL="gsiftp://nod28.phys.uconn.edu"
-httpsURL="https://grinch.phys.uconn.edu:2843"
+remotepath="/Gluex/resilient/simulation/moments-6-2023"
+gsiftpURL="gsiftp://cn440.storrs.hpc.uconn.edu"
+httpsURL="https://cn441.storrs.hpc.uconn.edu:2843"
 inputURL="https://gryphn.phys.uconn.edu/halld/moments-6-2023"
 wget="wget --ca-directory=/etc/grid-security/certificates"
 
@@ -89,7 +89,10 @@ elif [[ $1 = "g34" ]]; then
    simType=g34
 elif [[ $1 = "eta_pi0_p" ]]; then
    controlin=control.in
-   simType="eta_pi0_p"
+   simType="$1"
+elif [[ $1 = "eta_pi0_p_x10" ]]; then
+   controlin=control.in
+   simType="$1"
 else
    usage
 fi
@@ -122,7 +125,7 @@ if false; then
          run.ffr.template > fort.15
     bggen || clean_exit $? "bggen failed"
 else
-    xrdcp $xrootdURL/$remotepath/eta_pi0_p_$seqNo3.hddm genr8.hddm || clean_exit $? "cannot fetch $xrootdURL/$remotepath/eta_pi0_p_$seqNo3.hddm"
+    xrdcp $xrootdURL/$remotepath/${simType}_$seqNo.hddm genr8.hddm || clean_exit $? "cannot fetch $xrootdURL/$remotepath/${simType}_$seqNo.hddm"
 fi
 
 rseeds=$(head -n $seqNo randoms | tail -n1)
@@ -137,7 +140,7 @@ export JANA_GEOMETRY_URL="ccdb://GEOMETRY/main_HDDS.xml"
 export JANA_CALIB_CONTEXT="variation=mc"
 #export JANA_CALIB_CONTEXT="variation=fdcwires_test"
 
-if [ "$simType" = "g4" -o "$simType" = "g4t" -o "$simType" = "eta_pi0_p" -o "$simType" ="eta_pi0_p_x10" ]; then
+if [ "$simType" = "g4" -o "$simType" = "g4t" -o "$simType" = "eta_pi0_p" -o "$simType" = "eta_pi0_p_x10" ]; then
     simApp=hdgeant4
     cat setup > sim.sh
     echo "which hdgeant4" >> sim.sh
@@ -167,8 +170,8 @@ hd_root --config=hd_recon.config \
         -PTRK:SAVE_TRUNCATED_DEDX=1 \
        sample_smeared.hddm || clean_exit $? "hd_ana crashed"
 
-save_output sample.hddm ${simType}_${seqNo3}_geant4.hddm || clean_exit $? "save of sample.hddm failed"
-save_output sample_smeared.hddm ${simType}_${seqNo3}_smeared.hddm || clean_exit $? "save of sample_smeared.hddm failed"
-save_output dana_rest.hddm ${simType}_${seqNo3}_rest.hddm || clean_exit $? "save of dana_rest.hddm failed"
-save_output hd_root.root ${simType}_${seqNo3}_rest.root || clean_exit $? "save of hd_root.hddm failed"
+save_output sample.hddm ${simType}_${seqNo}_geant4.hddm || clean_exit $? "save of sample.hddm failed"
+save_output sample_smeared.hddm ${simType}_${seqNo}_smeared.hddm || clean_exit $? "save of sample_smeared.hddm failed"
+save_output dana_rest.hddm ${simType}_${seqNo}_rest.hddm || clean_exit $? "save of dana_rest.hddm failed"
+save_output hd_root.root ${simType}_${seqNo}_rest.root || clean_exit $? "save of hd_root.hddm failed"
 clean_exit
