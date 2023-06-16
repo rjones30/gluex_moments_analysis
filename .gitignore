@@ -16,6 +16,7 @@ test/
 .viminfo
 *.old/
 *.png
+archive/*
 src/generated_moments
 
 # Byte-compiled / optimized / DLL files
