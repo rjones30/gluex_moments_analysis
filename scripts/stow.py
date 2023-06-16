@@ -9,7 +9,7 @@ import subprocess
 import sys
 import re
 
-store = "gsiftp://nod29.phys.uconn.edu/Gluex/simulation/moments-6-2023"
+store = "https://cn440.storrs.hpc.uconn.edu:2843/Gluex/resilient/simulation/moments-6-2023"
 stash = "/home/www/docs/halld/moments-6-2023/"
 
 def usage():
@@ -23,6 +23,10 @@ templates = ["eta_pi0_p_{}_geant4.hddm",
              "eta_pi0_p_{}_smeared.hddm",
              "eta_pi0_p_{}_rest.hddm",
              "eta_pi0_p_{}_rest.root",
+             "eta_pi0_p_x10_{}_geant4.hddm",
+             "eta_pi0_p_x10_{}_smeared.hddm",
+             "eta_pi0_p_x10_{}_rest.hddm",
+             "eta_pi0_p_x10_{}_rest.root",
             ]
 regexps = [re.compile(template.format("([0-9]*)")) for template in templates]
 
