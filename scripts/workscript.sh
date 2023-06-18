@@ -112,7 +112,7 @@ $wget -O control.in $inputURL/config/$controlin 2>/dev/null || clean_exit $? "ca
 $wget -O randoms $inputURL/config/randoms.in 2>/dev/null || clean_exit $? "cannot fetch randoms.in from web server"
 $wget -O hd_recon.config $inputURL/config/hd_recon.config 2>/dev/null || clean_exit $? "cannot fetch hd_recon.config from web server"
 
-source setup || clean_exit $? "cannot execute setup.sh"
+source ./setup || clean_exit $? "cannot execute setup.sh"
 
 if false; then
     awk '/^TRIG/{print "TRIG  '$nevents'   number of events to simulate";next}\
