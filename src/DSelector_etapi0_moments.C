@@ -1,5 +1,6 @@
 #include "DSelector_etapi0_moments.h"
 #include <Math/SpecFuncMathMore.h>
+#include <vector>
 
 void DSelector_etapi0_moments::Init(TTree *locTree)
 {
@@ -45,7 +46,7 @@ void DSelector_etapi0_moments::Init(TTree *locTree)
 	//dAnalysisActions.push_back(new DCutAction_PIDDeltaT(dComboWrapper, false, 0.5, KPlus, SYS_BCAL));
 
 	//PIDFOM (for charged tracks)
-	dAnalysisActions.push_back(new DHistogramAction_PIDFOM(dComboWrapper));
+	//dAnalysisActions.push_back(new DHistogramAction_PIDFOM(dComboWrapper));
 	//dAnalysisActions.push_back(new DCutAction_PIDFOM(dComboWrapper, KPlus, 0.1));
 	//dAnalysisActions.push_back(new DCutAction_EachPIDFOM(dComboWrapper, 0.1));
 
@@ -666,17 +667,145 @@ double DSelector_etapi0_moments::angular_moment(int L, int M, double theta, doub
 
 #define SQRT2 1.4142135623730951
 
-	double dlm = ROOT::Math::sph_legendre(L, abs(M), theta);
-	if (M < 0)
-	    if (M % 2 == 0)
-		return sqrt2 * dlm * sin(-M * phi);
-	    else
-		return -sqrt2 * dlm * sin(-M * phi);
-	else if (M > 0)
-	    if (M % 2 == 0)
-		return sqrt2 * dlm * cos(M * phi);
-	    else
-		return -sqrt2 * dlm * cos(M * phi);
-	else
-		return dlm;
+    double dlm = ROOT::Math::sph_legendre(L, abs(M), theta);
+    if (M < 0)
+        if (M % 2 == 0)
+            return SQRT2 * dlm * sin(-M * phi);
+        else
+            return -SQRT2 * dlm * sin(-M * phi);
+    else if (M > 0)
+        if (M % 2 == 0)
+            return SQRT2 * dlm * cos(M * phi);
+        else
+            return -SQRT2 * dlm * cos(M * phi);
+    else
+        return dlm;
+}
+
+double DSelector_etapi0_moments::model1_moment(int L, int M) const
+{
+   // Computes the model 1 moment corresponding to real spherical harmonic index L,M.
+   // Model 1 here refers to a set of functions c[L,M] of arguments (mEtaPi0, abst)
+   // that are used to construct a mock data sample for testing a moments extraction
+   // procedure. Events moments computed with weigh model1_moment(L,M) emulate a sample
+   // whose parent kinematic density function is that produced by the genr8 generator,
+   // uniform in CM angles, multiplied by 
+   //        __                                                2
+   //     |  \                           L                   |
+   //     |  /_   c[L,M](mEtaPi0, abst) Y (theta_GJ, phi_GJ) |
+   //     |  L,M                         M                   |
+   //
+   // where the Y{LM} are the ordinary complex spherical harmonics. The evaluation of
+   // the functions c[L,M] is delegated to method model1_amplitude(L,M).
+
+   int M0(abs(M));
+   std::vector<double> moment{0,0};
+   for (int L1=0; L1 <= model1_Lmax(); ++L1) {
+      for (int M1=-L1; M1 <= L1; ++M1) {
+         for (int L2=abs(L-L1); L2 <= model1_Lmax(); ++L2) {
+            if (L2 <= L+L1 && abs(M0-M1) <= L2) {
+               int M2 = M0-M1;
+               std::vector<double> amp1 = model1_amplitude(L1, M1);
+               std::vector<double> amp2 = model1_amplitude(L2, M2);
+               double a = ROOT::Math::wigner_3j(2*L1, 2*L2, 2*L, 2*M1, 2*M2, -2*M0)
+                        * ROOT::Math::wigner_3j(2*L1, 2*L2, 2*L, 0, 0, 0)
+                        * sqrt(2*L1+1) * sqrt(2*L2+1) * sqrt(2*L+1)
+                        / sqrt(4*M_PI);
+               moment[0] += a * (amp1[0] * amp2[0] + amp1[1] * amp2[1]);
+               moment[1] += a * (amp1[1] * amp2[0] - amp1[0] * amp2[1]);
+            }
+         }
+      }
+   }
+   if (M == 0)
+      return moment[0];
+   else if (M > 0)
+      return moment[0] * SQRT2;
+   else
+      return -moment[1] * SQRT2;
+}
+
+double DSelector_etapi0_moments::model1_Lmax() const
+{
+   return 3;
+}
+
+std::vector<double> DSelector_etapi0_moments::model1_amplitude(int L, int M) const
+{
+   // Returns the complex amplitude specified in model 1 for partial wave L,M
+   // in the Gottfried Jackson frame, represented as a two-component vector with
+   // real part first, imaginary part second.
+
+#define SQR(x) ((x)*(x))
+   if (L > model1_Lmax()) {
+      return std::vector<double>{0,0};
+   }
+   else if (L == 0 && M == 0) {
+      double mag = 11.5 * exp(-0.5 * SQR((massEtaPi0 - 1.0) / 0.15)) * cos(3 * abst);
+      return std::vector<double>{mag, mag * (massEtaPi0 - 1.0)};
+   }
+   else if (L == 1 && M == 1) {
+      double mag = 0.5 * exp(-0.5 * SQR((massEtaPi0 - 1.8) / 0.500)) * sin(2 * abst);
+      return std::vector<double>{mag, mag * (massEtaPi0 - 1.8)};
+   }
+   else if (L == 1 && M == 0) {
+      double mag = 0.5 * exp(-0.5 * SQR((massEtaPi0 - 1.8) / 0.500));
+      return std::vector<double>{mag, mag * (massEtaPi0 - 1.8)};
+   }
+   else if (L == 1 && M == -1) {
+      double mag = 0.5 * exp(-0.5 * SQR((massEtaPi0 - 1.8) / 0.500)) * cos(2 * abst);
+      return std::vector<double>{mag, mag * (massEtaPi0 - 1.8)};
+   }
+   else if (L == 2 && M == 2) {
+      double mag = 0.5 * exp(-0.5 * SQR((massEtaPi0 - 1.4) / 0.200)) * sin(2 * abst) / (2*abst + 1e-99);
+      return std::vector<double>{mag, mag * (massEtaPi0 - 1.4)};
+   }
+   else if (L == 2 && M == 1) {
+      double mag = 0.5 * exp(-0.5 * SQR((massEtaPi0 - 1.2) / 0.300)) * cos(2 * abst);
+      return std::vector<double>{mag, mag * (massEtaPi0 - 1.2)};
+   }
+   else if (L == 2 && M == 0) {
+      double mag = 0.5 * exp(-0.5 * SQR((massEtaPi0 - 1.1) / 0.200)) * sin(1 * abst) / (1*abst + 1e-99);
+      return std::vector<double>{mag, mag * (massEtaPi0 - 1.1)};
+   }
+   else if (L == 2 && M == -1) {
+      double mag = -0.5 * exp(-0.5 * SQR((massEtaPi0 - 1.2) / 0.300)) * cos(2 * abst);
+      return std::vector<double>{mag, mag * (massEtaPi0 - 1.2)};
+   }
+   else if (L == 2 && M == -2) {
+      double mag = -0.5 * exp(-0.5 * SQR((massEtaPi0 - 1.4) / 0.200)) * sin(2 * abst) / (2*abst + 1e-99);
+      return std::vector<double>{mag, mag * (massEtaPi0 - 1.4)};
+   }
+   else {
+      return std::vector<double>{0,0};
+   }
+}
+
+double DSelector_etapi0_moments::model1_density(double theta, double phi, int source) const
+{
+   // Returns the model 1 density at Gottfried-Jackson angles theta,phi
+   // computed either from the complex amplitude sum (source==0) or from
+   // a sum over computed moments (source==1).
+
+   if (source == 0) {
+      double areal(0), aimag(0);
+      for (int L=0; L < model1_Lmax(); ++L) {
+         for (int M=-L; M <= L; ++M) {
+            std::vector<double> clm = model1_amplitude(L, M);
+            double dlm = ROOT::Math::sph_legendre(L, abs(M), theta);
+            areal += clm[0] * dlm * cos(M * phi) - clm[1] * dlm * sin(M * phi);
+            aimag += clm[0] * dlm * sin(M * phi) + clm[1] * dlm * cos(M * phi);
+         }
+      }
+      return areal*areal + aimag*aimag;
+   }
+   else {
+      double pdf = 0;
+      for (int L=0; L < model1_Lmax(); ++L) {
+         for (int M=-L; M <= L; ++M) {
+            pdf += angular_moment(L, M, theta, phi) * model1_moment(L, M);
+         }
+      }
+      return pdf;
+   }
 }

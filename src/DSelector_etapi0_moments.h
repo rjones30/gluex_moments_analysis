@@ -96,6 +96,10 @@ class DSelector_etapi0_moments : public DSelector
 		double YmomPi0_[91]; // L=0,2,4,6,8,10,12
 
 		double angular_moment(int L, int M, double theta, double phi) const;
+		double model1_moment(int L, int M) const;
+		std::vector<double> model1_amplitude(int L, int M) const;
+		double model1_Lmax() const;
+		double model1_density(double theta, double phi, int source=0) const;
 
 	ClassDef(DSelector_etapi0_moments, 0);
 };
