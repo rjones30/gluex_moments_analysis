@@ -19,10 +19,10 @@ if [[ -d $GEANT4PY/lib64 ]]; then
 else
     PYTHONPATH=$PYTHONPATH:$GEANT4PY/lib:$G4WORKDIR/g4py
 fi
-export DIRACXX=/cvmfs/oasis.opensciencegrid.org/gluex/Diracxx
+export DIRACXX=/cvmfs/oasis.opensciencegrid.org/gluex/Diracxx/x86_64
 export HDF5ROOT=/cvmfs/oasis.opensciencegrid.org/gluex/hdf5-1.12.0
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HDF5ROOT/lib
-export LD_LIBRARY_PATH=$DIRACXX:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$DIRACXX/lib:$LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=$G4ROOT/lib64:$LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=$G4WORKDIR/tmp/Linux-g++/hdgeant4:$LD_LIBRARY_PATH
 export PATH=$G4WORKDIR/bin/Linux-g++:$PATH
