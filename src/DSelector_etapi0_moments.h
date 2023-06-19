@@ -98,8 +98,12 @@ class DSelector_etapi0_moments : public DSelector
 		double angular_moment(int L, int M, double theta, double phi) const;
 		double model1_moment(int L, int M) const;
 		std::vector<double> model1_amplitude(int L, int M) const;
+		double model1_density(int source=0) const;
+		void model1_use_generated(int yesno=1);
 		double model1_Lmax() const;
-		double model1_density(double theta, double phi, int source=0) const;
+
+ private:
+    int model1_generated_kinematics;
 
 	ClassDef(DSelector_etapi0_moments, 0);
 };

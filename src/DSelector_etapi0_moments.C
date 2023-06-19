@@ -152,6 +152,8 @@ void DSelector_etapi0_moments::Init(TTree *locTree)
 	dFlatTreeInterface->Create_Branch_FundamentalArray<Double_t>("YmomEta_", "momentsEta");
 	dFlatTreeInterface->Create_Branch_FundamentalArray<Double_t>("YmomPi0_", "momentsPi0");
 
+    model1_generated_kinematics = 0;
+
 	/************************************* ADVANCED EXAMPLE: CHOOSE BRANCHES TO READ ************************************/
 
 	//TO SAVE PROCESSING TIME
@@ -667,17 +669,12 @@ double DSelector_etapi0_moments::angular_moment(int L, int M, double theta, doub
 
 #define SQRT2 1.4142135623730951
 
-    double dlm = ROOT::Math::sph_legendre(L, abs(M), theta);
+    int Mabs = abs(M);
+    double dlm = ROOT::Math::sph_legendre(L, Mabs, theta);
     if (M < 0)
-        if (M % 2 == 0)
-            return SQRT2 * dlm * sin(-M * phi);
-        else
-            return -SQRT2 * dlm * sin(-M * phi);
+        return SQRT2 * dlm * sin(Mabs * phi) * ((Mabs % 2)? -1 : 1);
     else if (M > 0)
-        if (M % 2 == 0)
-            return SQRT2 * dlm * cos(M * phi);
-        else
-            return -SQRT2 * dlm * cos(M * phi);
+        return SQRT2 * dlm * cos(Mabs * phi) * ((Mabs % 2)? -1 : 1);
     else
         return dlm;
 }
@@ -706,9 +703,10 @@ double DSelector_etapi0_moments::model1_moment(int L, int M) const
             if (L2 <= L+L1 && abs(M0-M1) <= L2) {
                int M2 = M0-M1;
                std::vector<double> amp1 = model1_amplitude(L1, M1);
-               std::vector<double> amp2 = model1_amplitude(L2, M2);
+               std::vector<double> amp2 = model1_amplitude(L2, -M2);
                double a = ROOT::Math::wigner_3j(2*L1, 2*L2, 2*L, 2*M1, 2*M2, -2*M0)
                         * ROOT::Math::wigner_3j(2*L1, 2*L2, 2*L, 0, 0, 0)
+                        * ((M2 % 2)? -1 : 1)
                         * sqrt(2*L1+1) * sqrt(2*L2+1) * sqrt(2*L+1)
                         / sqrt(4*M_PI);
                moment[0] += a * (amp1[0] * amp2[0] + amp1[1] * amp2[1]);
@@ -737,75 +735,126 @@ std::vector<double> DSelector_etapi0_moments::model1_amplitude(int L, int M) con
    // real part first, imaginary part second.
 
 #define SQR(x) ((x)*(x))
+
+   double mX(massEtaPi0);
+   double t(abst);
+   if (model1_generated_kinematics) {
+      mX = massEtaPi0_;
+      t = abst_;
+   }
+
    if (L > model1_Lmax()) {
       return std::vector<double>{0,0};
    }
    else if (L == 0 && M == 0) {
-      double mag = 11.5 * exp(-0.5 * SQR((massEtaPi0 - 1.0) / 0.15)) * cos(3 * abst);
-      return std::vector<double>{mag, mag * (massEtaPi0 - 1.0)};
+      double mag = 11.5 * exp(-0.5 * SQR((mX - 1.0) / 0.15)) * cos(3 * t);
+      return std::vector<double>{mag, mag * (mX - 1.0)};
    }
    else if (L == 1 && M == 1) {
-      double mag = 0.5 * exp(-0.5 * SQR((massEtaPi0 - 1.8) / 0.500)) * sin(2 * abst);
-      return std::vector<double>{mag, mag * (massEtaPi0 - 1.8)};
+      double mag = 0.5 * exp(-0.5 * SQR((mX - 1.8) / 0.500)) * sin(2 * t);
+      return std::vector<double>{mag, mag * (mX - 1.8)};
    }
    else if (L == 1 && M == 0) {
-      double mag = 0.5 * exp(-0.5 * SQR((massEtaPi0 - 1.8) / 0.500));
-      return std::vector<double>{mag, mag * (massEtaPi0 - 1.8)};
+      double mag = 0.59 * exp(-0.5 * SQR((mX - 1.7) / 0.500));
+      return std::vector<double>{mag, mag * (mX - 1.7)};
    }
    else if (L == 1 && M == -1) {
-      double mag = 0.5 * exp(-0.5 * SQR((massEtaPi0 - 1.8) / 0.500)) * cos(2 * abst);
-      return std::vector<double>{mag, mag * (massEtaPi0 - 1.8)};
+      double mag = -4.5 * exp(-0.5 * SQR((mX - 1.6) / 0.500)) * cos(2 * t);
+      return std::vector<double>{mag, mag * (mX - 1.6)};
    }
    else if (L == 2 && M == 2) {
-      double mag = 0.5 * exp(-0.5 * SQR((massEtaPi0 - 1.4) / 0.200)) * sin(2 * abst) / (2*abst + 1e-99);
-      return std::vector<double>{mag, mag * (massEtaPi0 - 1.4)};
+      double mag = 8.5 * exp(-0.5 * SQR((mX - 1.4) / 0.200)) * sin(2 * t) / (2*t + 1e-99);
+      return std::vector<double>{mag, mag * (mX - 1.4)};
    }
    else if (L == 2 && M == 1) {
-      double mag = 0.5 * exp(-0.5 * SQR((massEtaPi0 - 1.2) / 0.300)) * cos(2 * abst);
-      return std::vector<double>{mag, mag * (massEtaPi0 - 1.2)};
+      double mag = 1.5 * exp(-0.5 * SQR((mX - 1.2) / 0.300)) * cos(2 * t);
+      return std::vector<double>{mag, mag * (mX - 1.2)};
    }
    else if (L == 2 && M == 0) {
-      double mag = 0.5 * exp(-0.5 * SQR((massEtaPi0 - 1.1) / 0.200)) * sin(1 * abst) / (1*abst + 1e-99);
-      return std::vector<double>{mag, mag * (massEtaPi0 - 1.1)};
+      double mag = -0.5 * exp(-0.5 * SQR((mX - 1.1) / 0.200)) * sin(1 * t) / (1*t + 1e-99);
+      return std::vector<double>{mag, mag * (mX - 1.1)};
    }
    else if (L == 2 && M == -1) {
-      double mag = -0.5 * exp(-0.5 * SQR((massEtaPi0 - 1.2) / 0.300)) * cos(2 * abst);
-      return std::vector<double>{mag, mag * (massEtaPi0 - 1.2)};
+      double mag = -3.5 * exp(-0.5 * SQR((mX - 1.3) / 0.300)) * cos(2 * t);
+      return std::vector<double>{mag, mag * (mX - 1.3)};
    }
    else if (L == 2 && M == -2) {
-      double mag = -0.5 * exp(-0.5 * SQR((massEtaPi0 - 1.4) / 0.200)) * sin(2 * abst) / (2*abst + 1e-99);
-      return std::vector<double>{mag, mag * (massEtaPi0 - 1.4)};
+      double mag = -17.5 * exp(-0.5 * SQR((mX - 1.5) / 0.200)) * sin(2 * t) / (2*t + 1e-99);
+      return std::vector<double>{mag, mag * (mX - 1.5)};
+   }
+   else if (L == 3 && M == 3) {
+      double mag = 0.85 * exp(-0.5 * SQR((mX - 1.48) / 0.200)) * sin(2 * t) / (2*t + 1e-99);
+      return std::vector<double>{mag, mag * (mX - 1.48)};
+   }
+   else if (L == 3 && M == 2) {
+      double mag = 0.7 * exp(-0.5 * SQR((mX - 1.23) / 0.300)) * cos(2 * t);
+      return std::vector<double>{mag, mag * (mX - 1.23)};
+   }
+   else if (L == 3 && M == 1) {
+      double mag = -0.15 * exp(-0.5 * SQR((mX - 1.18) / 0.200)) * sin(1 * t) / (1*t + 1e-99);
+      return std::vector<double>{mag, mag * (mX - 1.18)};
+   }
+   else if (L == 3 && M == 0) {
+      double mag = -9.5 * exp(-0.5 * SQR((mX - 1.32) / 0.300)) * cos(2 * t);
+      return std::vector<double>{mag, mag * (mX - 1.32)};
+   }
+   else if (L == 3 && M == -1) {
+      double mag = -0.95 * exp(-0.5 * SQR((mX - 1.56) / 0.200)) * sin(2 * t) / (2*t + 1e-99);
+      return std::vector<double>{mag, mag * (mX - 1.56)};
+   }
+   else if (L == 3 && M == -2) {
+      double mag = 0.65 * exp(-0.5 * SQR((mX - 1.26) / 0.200)) * sin(2 * t) / (2*t + 1e-99);
+      return std::vector<double>{mag, mag * (mX - 1.26)};
+   }
+   else if (L == 3 && M == -3) {
+      double mag = -4.95 * exp(-0.5 * SQR((mX - 1.66) / 0.200)) * sin(2 * t) / (2*t + 1e-99);
+      return std::vector<double>{mag, mag * (mX - 1.66)};
    }
    else {
       return std::vector<double>{0,0};
    }
 }
 
-double DSelector_etapi0_moments::model1_density(double theta, double phi, int source) const
+double DSelector_etapi0_moments::model1_density(int source) const
 {
-   // Returns the model 1 density at Gottfried-Jackson angles theta,phi
+   // Returns the model 1 density at Gottfried-Jackson angles thetaGJ,phiGJ
    // computed either from the complex amplitude sum (source==0) or from
    // a sum over computed moments (source==1).
 
+   double theta(thetaGJ);
+   double phi(phiGJ);
+   if (model1_generated_kinematics) {
+      theta = thetaGJ_;
+      phi = phiGJ_;
+   }
+
    if (source == 0) {
       double areal(0), aimag(0);
-      for (int L=0; L < model1_Lmax(); ++L) {
+      for (int L=0; L <= model1_Lmax(); ++L) {
          for (int M=-L; M <= L; ++M) {
             std::vector<double> clm = model1_amplitude(L, M);
-            double dlm = ROOT::Math::sph_legendre(L, abs(M), theta);
-            areal += clm[0] * dlm * cos(M * phi) - clm[1] * dlm * sin(M * phi);
-            aimag += clm[0] * dlm * sin(M * phi) + clm[1] * dlm * cos(M * phi);
+            double dlm = ROOT::Math::sph_legendre(L, abs(M), thetaGJ);
+            if (M < 0) {
+               dlm *= ((abs(M) % 2)? -1 : 1);
+            }
+            areal += dlm * (clm[0] * cos(M * phi) - clm[1] * sin(M * phi));
+            aimag += dlm * (clm[0] * sin(M * phi) + clm[1] * cos(M * phi));
          }
       }
       return areal*areal + aimag*aimag;
    }
    else {
       double pdf = 0;
-      for (int L=0; L < model1_Lmax(); ++L) {
+      for (int L=0; L <= 2*model1_Lmax(); ++L) {
          for (int M=-L; M <= L; ++M) {
             pdf += angular_moment(L, M, theta, phi) * model1_moment(L, M);
          }
       }
       return pdf;
    }
+}
+
+void DSelector_etapi0_moments::model1_use_generated(int yesno)
+{
+   model1_generated_kinematics = yesno;
 }
