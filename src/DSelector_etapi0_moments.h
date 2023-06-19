@@ -94,18 +94,18 @@ class DSelector_etapi0_moments : public DSelector
 		double YmomGJ_[169]; // L=0...12
 		double YmomEta_[91]; // L=0,2,4,6,8,10,12
 		double YmomPi0_[91]; // L=0,2,4,6,8,10,12
-        double model1moment[169];
-        double model1moment_[169];
+ 		double model1moment[169];
+		double model1moment_[169];
 
 		double angular_moment(int L, int M, double theta, double phi) const;
 		double model1_moment(int L, int M) const;
 		double model1_density(int source=0) const;
 
-        // This is where model 1 is defined
+		// This is where model 1 is defined
 		double model1_Lmax() const;
 		std::vector<double> model1_amplitude(int L, int M) const;
 		void model1_use_generated(int yesno=1);
-        int model1_generated_kinematics;
+		int model1_generated_kinematics;
 
 	ClassDef(DSelector_etapi0_moments, 0);
 };

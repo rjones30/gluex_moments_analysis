@@ -559,16 +559,16 @@ Bool_t DSelector_etapi0_moments::Process(Long64_t locEntry)
 		dFlatTreeInterface->Fill_Fundamental<Double_t>("phiEta", phiEta);
 		dFlatTreeInterface->Fill_Fundamental<Double_t>("thetaPi0", thetaPi0);
 		dFlatTreeInterface->Fill_Fundamental<Double_t>("phiPi0", phiPi0);
-        momentsGJ = 0;
+		momentsGJ = 0;
 		for (int L=0; L < 13; L += 1) {
 			for (int M=-L; M <= L; M += 1) {
 				YmomGJ[momentsGJ] = angular_moment(L, M, thetaGJ, phiGJ);
 				YmomGJ_[momentsGJ] = angular_moment(L, M, thetaGJ_, phiGJ_);
 
-                model1_use_generated(0);
-                model1moment[momentsGJ] = model1_moment(L, M);
-                model1_use_generated(1);
-                model1moment_[momentsGJ] = model1_moment(L, M);
+				model1_use_generated(0);
+				model1moment[momentsGJ] = model1_moment(L, M);
+				model1_use_generated(1);
+				model1moment_[momentsGJ] = model1_moment(L, M);
 
 				++momentsGJ;
 			}
@@ -577,6 +577,9 @@ Bool_t DSelector_etapi0_moments::Process(Long64_t locEntry)
         for (unsigned int m=0; m < momentsGJ; ++m) {
 			dFlatTreeInterface->Fill_Fundamental<Double_t>("YmomGJ", YmomGJ[m], m);
 			dFlatTreeInterface->Fill_Fundamental<Double_t>("YmomGJ_", YmomGJ_[m], m);
+
+			dFlatTreeInterface->Fill_Fundamental<Double_t>("model1moment", model1moment[m], m);
+			dFlatTreeInterface->Fill_Fundamental<Double_t>("model1moment_", model1moment_[m], m);
 		}
         momentsEta = 0;
 		for (int L=0; L < 13; L += 2) {
