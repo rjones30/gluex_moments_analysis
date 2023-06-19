@@ -1,7 +1,7 @@
 #!/bin/bash
 
 batch=0
-nthreads=4
+nthreads=64
 
 JANA_GEOMETRY_URL=ccdb://GEOMETRY/main_HDDS.xml
 JANA_CALIB_URL=sqlite:////group/halld/www/halldweb/html/dist/ccdb.sqlite
