@@ -676,7 +676,7 @@ void DSelector_etapi0_moments::Finalize(void)
 
 double DSelector_etapi0_moments::angular_moment(int L, int M, double theta, double phi) const
 {
-	// These are the real-valued spherical harmonics, Condon and Shortley convention
+    // These are the real-valued spherical harmonics, Condon and Shortley convention
 
 #define SQRT2 1.4142135623730951
 

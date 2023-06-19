@@ -15,7 +15,7 @@ void usage()
 {
    std::cout << "usage: generated_moments [options] <infile1.hddm> [...]" << std::endl
              << " where options may include any of the following." << std::endl
-             << "  -o <outfile.root> - write output tree to <outfile.root>,"
+             << "  -o <outfile.root> - write output tree to <outfile.root>"
              << ", default is " << outfilename << std::endl;
    exit(1);
   
@@ -23,13 +23,18 @@ void usage()
 
 double angular_moment(int L, int M, double theta, double phi)
 {
-   double dlm = ROOT::Math::sph_legendre(L, abs(M), theta);
-   if (M < 0)
-      return dlm * sin(-M * phi);
-   else if (M > 0)
-      return dlm * cos(M * phi);
-   else
-      return dlm;
+    // These are the real-valued spherical harmonics, Condon and Shortley convention
+
+#define SQRT2 1.4142135623730951
+
+    int Mabs = abs(M);
+    double dlm = ROOT::Math::sph_legendre(L, Mabs, theta);
+    if (M < 0)
+        return SQRT2 * dlm * sin(Mabs * phi) * ((Mabs % 2)? -1 : 1);
+    else if (M > 0)
+        return SQRT2 * dlm * cos(Mabs * phi) * ((Mabs % 2)? -1 : 1);
+    else
+        return dlm;
 }
 
 int main(int argc, char *argv[])
