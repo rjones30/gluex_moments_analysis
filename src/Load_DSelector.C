@@ -5,4 +5,5 @@
 	gSystem->AddIncludePath("-I" HALLD_RECON_HOME "/include/");
 	gSystem->AddIncludePath("-I" ROOT_ANALYSIS_HOME "/include/");
 	gSystem->Load(ROOT_ANALYSIS_HOME "/lib/libDSelector.so");
+	gSystem->Load("${ROOTSYS}/lib/libMathMore.so");
 }
