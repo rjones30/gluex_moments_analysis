@@ -151,6 +151,8 @@ void DSelector_etapi0_moments::Init(TTree *locTree)
 	dFlatTreeInterface->Create_Branch_FundamentalArray<Double_t>("YmomGJ_", "momentsGJ");
 	dFlatTreeInterface->Create_Branch_FundamentalArray<Double_t>("YmomEta_", "momentsEta");
 	dFlatTreeInterface->Create_Branch_FundamentalArray<Double_t>("YmomPi0_", "momentsPi0");
+	dFlatTreeInterface->Create_Branch_FundamentalArray<Double_t>("model1moment", "momentsGJ");
+	dFlatTreeInterface->Create_Branch_FundamentalArray<Double_t>("model1moment_", "momentsGJ");
 
     model1_generated_kinematics = 0;
 
@@ -562,6 +564,12 @@ Bool_t DSelector_etapi0_moments::Process(Long64_t locEntry)
 			for (int M=-L; M <= L; M += 1) {
 				YmomGJ[momentsGJ] = angular_moment(L, M, thetaGJ, phiGJ);
 				YmomGJ_[momentsGJ] = angular_moment(L, M, thetaGJ_, phiGJ_);
+
+                model1_use_generated(0);
+                model1moment[momentsGJ] = model1_moment(L, M);
+                model1_use_generated(1);
+                model1moment_[momentsGJ] = model1_moment(L, M);
+
 				++momentsGJ;
 			}
 		}
