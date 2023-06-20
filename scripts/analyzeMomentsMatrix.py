@@ -18,19 +18,13 @@ import scipy.linalg
 
 def usage():
   print("usage: >>> import analyzeMomentsMatrix.py as ana")
-  print("  >>> ana.open(\"filename.h5\")", end='')
-  print("   - open acceptance matrix sum file filename.h5 for analysis")
-  print("  >>> ana.histogram_M_diagonal()", end='')
-  print("   - return a TH1D of the diagonal elements of M with errors")
-  print("  >>> ana.histogram_M_diagonal_GJ0()", end='')
-  print("   - return a TH1D of the diagonal elements of M with L_GJ=0")
-  print("  >>> ana.histogram_M_diagonal_GJ0_Eta0()", end='')
-  print("   - return a TH1D of the diagonal elements of M with L_GJ=0,LEta=0")
-  print("  >>> ana.histogram_M_offdiagonal", end='')
-  print("   - return a TH1D of the normalized off-diagonal elements of M")
-  print("  >>> ana.do_svd()", end='')
-  print("   - perform the SVD of M, return (w,v) where w is a vector", end='')
-  print(" of eigenvalues and v is a matrix with eigenvectors as columns")
+  print("  >>> ana.open(\"filename.h5\")")
+  print("  >>> w,v = ana.do_svd()")
+  print("  >>> h = ana.histogram_M_diagonal()")
+  print("  >>> h = ana.histogram_M_diagonal_GJ0()")
+  print("  >>> h = ana.histogram_M_diagonal_GJ0_Eta0()")
+  print("  >>> h = ana.histogram_M_offdiagonal()")
+  print("  >>> h = ana.histogram_eigenvalues(name, title, w)")
 
 if len(sys.argv) < 2 or sys.argv[1][0] == '-':
   usage()
@@ -50,6 +44,15 @@ def open(h5input):
   except:
     accepted_subset = 0
   return accepted_subset
+
+def do_svd(h5input=0, lower=True):
+  if not h5input in h5inputs:
+    try:
+      h5inputs[0] = 1
+    except:
+      print("unable to open input moments file", h5input)
+      return 0
+  return scipy.linalg.eigh(M, lower=lower)
 
 def histogram_M_diagonal(h5input=0):
   if not h5input in h5inputs:
@@ -143,10 +146,10 @@ def histogram_M_offdiagonal(h5input=0):
   hEabove = []
   hEbelow = []
   for i in range(nthreads):
-    hMabovediag = ROOT.TH1D(f"hMabovediag{i}", "M above-diagonal elements normalized to diagonal", 10000,-0.1, 0.1)
-    hMbelowdiag = ROOT.TH1D(f"hMbelowdiag{i}", "M below-diagonal elements normalized to diagonal", 10000,-0.1, 0.1)
-    hEabovediag = ROOT.TH1D(f"hEabovediag{i}", "M above-diagonal error normalized to diagonal", 10000,-0.1, 0.1)
-    hEbelowdiag = ROOT.TH1D(f"hEbelowdiag{i}", "M below-diagonal error normalized to diagonal", 10000,-0.1, 0.1)
+    hMabovediag = ROOT.TH1D(f"hMabovediag{i}", "M above-diagonal elements normalized to diagonal", 200,-0.1, 0.1)
+    hMbelowdiag = ROOT.TH1D(f"hMbelowdiag{i}", "M below-diagonal elements normalized to diagonal", 200,-0.1, 0.1)
+    hEabovediag = ROOT.TH1D(f"hEabovediag{i}", "M above-diagonal error normalized to diagonal", 200,-0.1, 0.1)
+    hEbelowdiag = ROOT.TH1D(f"hEbelowdiag{i}", "M below-diagonal error normalized to diagonal", 200,-0.1, 0.1)
     hMabovediag.GetXaxis().SetTitle("normalized M matrix element")
     hMabovediag.GetYaxis().SetTitle("moments")
     hMbelowdiag.GetXaxis().SetTitle("normalized M matrix element")
@@ -206,17 +209,6 @@ def histogram_offdiagonal(name, M, Mvar):
       hMabovediag.Fill(M[i,j] / (M[i,i] * M[j,j])**0.5)
       hEabovediag.Fill((Mvar[i,j] / (M[i,i] * M[j,j]))**0.5)
   return (hMabovediag, hMbelowdiag, hEabovediag, hEbelowdiag)
-
-def do_svd(h5input=0, lower=True):
-  accepted_subset = 0
-  if not h5input in h5inputs:
-    try:
-      accepted_subset = open(h5input)
-      h5inputs[0] = 1
-    except:
-      print("unable to open input moments file", h5input)
-      return 0
-  return scipy.linalg.eigh(M, lower=lower), accepted_subset
 
 def histogram_eigenvalues(name, title, w, normfactor=1):
   ndim = len(w)
