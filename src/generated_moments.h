@@ -13,9 +13,10 @@
    double phiEta;
    double thetaPi0;
    double phiPi0;
-   double momentsGJ;
-   double momentsEta;
-   double momentsPi0;
+   int momentsGJ;
+   int momentsEta;
+   int momentsPi0;
    double YmomGJ[169];
    double YmomEta[169];
    double YmomPi0[169];
+   double model1moment[169];
