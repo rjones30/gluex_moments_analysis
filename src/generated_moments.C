@@ -5,6 +5,7 @@
 #include <TTree.h>
 #include <TLorentzVector.h>
 #include <Math/SpecFuncMathMore.h>
+#include <climits>
 
 #include "generated_moments.h"
 
@@ -15,6 +16,8 @@ void usage()
 {
    std::cout << "usage: generated_moments [options] <infile1.hddm> [...]" << std::endl
              << " where options may include any of the following." << std::endl
+             << "  -n <noutput> - stop after writing <noutput> events [all]" << std::endl
+             << "  -s <nskip> - skip <nskip> events at start of input [0]" << std::endl
              << "  -o <outfile.root> - write output tree to <outfile.root>"
              << ", default is " << outfilename << std::endl;
    exit(1);
@@ -206,12 +209,19 @@ double model1_density(int source)
 
 int main(int argc, char *argv[])
 {
+   long int nskip(0);
+   long int maxnout(LLONG_MAX);
+
    int iarg(1);
    while (iarg < argc && argv[iarg][0] == '-') {
-      if (strstr(argv[iarg], "-o") == 0)
-         usage();
-      else if (++iarg < argc) {
-         outfilename = argv[iarg];
+      if (strstr(argv[iarg], "-o") == argv[iarg]) {
+         outfilename = argv[++iarg];
+      }
+      else if (strstr(argv[iarg], "-n") == argv[iarg]) {
+         maxnout = std::atoi(argv[++iarg]);
+      }
+      else if (strstr(argv[iarg], "-s") == argv[iarg]) {
+         nskip = std::atoi(argv[++iarg]);
       }
       else {
          usage();
@@ -221,6 +231,8 @@ int main(int argc, char *argv[])
    if (iarg >= argc)
       usage();
 
+   std::cout << "writing at most " << maxnout << " events to " << outfilename
+             << " starting with input event " << nskip << std::endl;
    TFile ftree(outfilename, "recreate");
    TTree *tree = new TTree("etapi0_moments", "eta pi0 moments");
 
@@ -247,9 +259,14 @@ int main(int argc, char *argv[])
    tree->Branch("YmomPi0", YmomPi0, "YmomPi0[momentsPi0]/D");
    tree->Branch("model1moment", model1moment, "model1moment[momentsGJ]/D");
 
+   int nout(0);
    for (;iarg < argc; ++iarg) {
       std::ifstream infile(argv[iarg]);
       hddm_s::istream inhddm(infile);
+      if (nskip > 0) {
+         inhddm.skip(nskip);
+	 nskip = 0;
+      }
       hddm_s::HDDM record;
       while (inhddm >> record) {
          hddm_s::PhysicsEventList pes = record.getPhysicsEvents();
@@ -332,6 +349,8 @@ int main(int argc, char *argv[])
             }
          }
          tree->Fill();
+         if (++nout == maxnout)
+            break;
       }
    }
 
