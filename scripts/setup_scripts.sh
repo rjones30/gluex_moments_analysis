@@ -1,1 +1,1 @@
-export PYTHONPATH=$PYTHONPATH:`pwd`/scripts
+export PYTHONPATH=$PYTHONPATH:/srv/scripts
