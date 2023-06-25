@@ -28,21 +28,22 @@ import sys
 
 def usage():
   print("usage: >>> import buildMomentsMatrix as bmm")
-  print("       >>> bmm.open('etapi0_moments_0.root:etapi0_moments')")
-  print("       >>> acc_events = bmm.select_events(massEtaPi0_limits=(1.2,1.5), abst_limits=(0,0.2))")
-  print("       >>> M,Mvar = bmm.buildMomentsMatrix_sequential(acc_events)")
-  print("       >>> bmm.open('etapi0_moments_1.root:etapi0_moments')")
-  print("       >>> acc_events2 = bmm.select_events(massEtaPi0_limits=(1.2,1.5), abst_limits=(0,0.2))")
-  print("       >>> M2,Mvar2 = bmm.buildMomentsMatrix_threaded(acc_events2)")
-  print("       >>> M += M2")
-  print("       >>> Mvar += Mvar2")
-  print("       >>> acc_events += acc_events2")
-  print("       >>> # more of the above, till all accepted moments trees are read ...")
-  print("       >>> bmm.open('generated_moments.root:etapi0_moments')")
-  print("       >>> gen_events=bmm.select_events(massPi0Eta_limits=(1.2,1.5), abst_limits=(0,0.2))")
-  print("       >>> outfile = 'save_moments_matrix.h5')")
-  print("       >>> bmm.save_output(M, Mvar, acc_events, gen_events, outfile)")
+  print("  >>> bmm.open('etapi0_moments_0.root:etapi0_moments')")
+  print("  >>> acc_events = bmm.select_events(massEtaPi0_limits=(1.2,1.5), abst_limits=(0,0.2))")
+  print("  >>> M,Mvar = bmm.buildMomentsMatrix_sequential(acc_events)")
+  print("  >>> bmm.open('etapi0_moments_1.root:etapi0_moments')")
+  print("  >>> acc_events2 = bmm.select_events(massEtaPi0_limits=(1.2,1.5), abst_limits=(0,0.2))")
+  print("  >>> M2,Mvar2 = bmm.buildMomentsMatrix_threaded(acc_events2)")
+  print("  >>> M += M2")
+  print("  >>> Mvar += Mvar2")
+  print("  >>> acc_events += acc_events2")
+  print("  >>> # more of the above, till all accepted moments trees are read ...")
+  print("  >>> bmm.open('generated_moments.root:etapi0_moments')")
+  print("  >>> gen_events=bmm.select_events(massEtaPi0_limits=(1.2,1.5), abst_limits=(0,0.2))")
+  print("  >>> outfile = 'save_moments_matrix.h5')")
+  print("  >>> bmm.save_output(M, Mvar, acc_events, gen_events, outfile)")
 
+upcache = {}
 mPi0,mPi0 = 0,0
 mEta,mEta_ = 0,0
 mGJ,mGJ_ = 0,0
@@ -50,50 +51,21 @@ usage()
 
 def open(intree_name):
    global intree
-   intree = uproot.open(intree_name)
-   global YmomGJ
-   global YmomEta
-   global YmomPi0
-   global YmomGJ_
-   global YmomEta_
-   global YmomPi0_
-   YmomGJ = intree["YmomGJ"].array()[:].to_numpy()
-   YmomEta = intree["YmomEta"].array()[:].to_numpy()
-   YmomPi0 = intree["YmomPi0"].array()[:].to_numpy()
    try:
-      YmomGJ_ = intree["YmomGJ_"].array()[:].to_numpy()
-      YmomEta_ = intree["YmomEta_"].array()[:].to_numpy()
-      YmomPi0_ = intree["YmomPi0_"].array()[:].to_numpy()
+      intree.close()
    except:
-      YmomGJ_ = YmomGJ
-      YmomEta_ = YmomEta
-      YmomPi0_ = YmomPi0
-
-   global massEtaPi0
-   global abst
+      pass
+   upcache.clear()
+   intree = uproot.open(intree_name)
    global mGJ
    global mEta
    global mPi0
-   global mGJ_
-   global mEta_
-   global mPi0_
-   massEtaPi0 = intree["massEtaPi0"].array()[:].to_numpy()
-   abst = intree["abst"].array()[:].to_numpy()
-   mGJ = YmomGJ[0].shape[0]
-   mEta = YmomEta[0].shape[0]
-   mPi0 = YmomPi0[0].shape[0]
-   mGJ_ = YmomGJ_[0].shape[0]
-   mEta_ = YmomEta_[0].shape[0]
-   mPi0_ = YmomPi0_[0].shape[0]
-
-   global model1moment
-   try:
-      model1moment = intree["model1moment"].array()[:].to_numpy()
-   except:
-      model1moment = [np.zeros([mGJ], dtype=float)] * massEtaPi0.shape[0]
+   mGJ = intree["momentsGJ"].array()[0]
+   mEta = intree["momentsEta"].array()[0]
+   mPi0 = intree['momentsPi0'].array()[0]
    return intree
 
-def select_events(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=0, count=-1, start=0):
+def select_events(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=0, count=-1, start=0, maxweight=0):
    """
    Select a subset of events from the most recently loaded tree, respecting the
    the specified limits in massEtaPi0 and abst, starting at event start and continuing
@@ -101,15 +73,29 @@ def select_events(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=0, count=-
    otherwise all events are accepted.
    """
    events = []
+   massEtaPi0 = intree['massEtaPi0'].array(array_cache=upcache).to_numpy()
+   abst = intree['abst'].array(array_cache=upcache).to_numpy()
    if count < 0:
       count = len(massEtaPi0)
    if model == 1:
+      YmomGJ = intree['YmomGJ'].array(array_cache=upcache).to_numpy()
+      model1moment = intree['model1moment'].array(array_cache=upcache).to_numpy()
       weight = np.zeros([massEtaPi0.shape[0]], dtype=float)
       for i in range(start, start + count):
          if massEtaPi0[i] > massEtaPi0_limits[0] and massEtaPi0[i] < massEtaPi0_limits[1]:
             if abst[i] > abst_limits[0] and abst[i] < abst_limits[1]:
                weight[i] = np.dot(YmomGJ[i], model1moment[i])
-      maxweight = max(weight)
+               if weight[i] <= 0:
+                  print("error in select_events: non-positive event weight found",
+                        weight[i], model1moment[i],YmomGJ[i])
+                  return []
+               elif weight[i] > maxweight and maxweight > 0:
+                  print("error in select_events: event with weight > maxweight found",
+                        weight[i], model1moment[i],YmomGJ[i])
+                  return []
+      if maxweight == 0:
+         maxweight = max(weight)
+      print("maxweight =", maxweight)
    for i in range(start, start + count):
       if massEtaPi0[i] > massEtaPi0_limits[0] and massEtaPi0[i] < massEtaPi0_limits[1]:
          if abst[i] > abst_limits[0] and abst[i] < abst_limits[1]:
@@ -126,15 +112,18 @@ def compute_moments(events, mPi0=0, mEta=0, mGJ=0, use_generated=0):
    if mGJ == 0:
       mGJ = globals()['mGJ']
    moments = np.zeros([mPi0 * mEta * mGJ], dtype=float)
-   errors = np.zeros([mPi0 * mEta * mGJ], dtype=float)
+   momentsvar = np.zeros([mPi0 * mEta * mGJ], dtype=float)
+   if use_generated:
+      try:
+         YmomGJ = intree['YmomGJ_'].array(array_cache=upcache).to_numpy()
+      except:
+         YmomGJ = intree['YmomGJ'].array(array_cache=upcache).to_numpy()
+   else:
+      YmomGJ = intree['YmomGJ'].array(array_cache=upcache).to_numpy()
    for iev in events:
-      if use_generated:
-         moments += YmomGJ_[iev]
-         errors += np.square(YmomGJ_[iev])
-      else:
-         moments += YmomGJ[iev]
-         errors += np.square(YmomGJ[iev])
-   return moments, errors
+      moments += YmomGJ[iev]
+      momentsvar += np.square(YmomGJ[iev])
+   return moments, momentsvar
 
 def buildMomentsMatrix_sequential(events, mPi0=0, mEta=0, mGJ=0, use_c_extension_library=False):
    """
@@ -151,6 +140,17 @@ def buildMomentsMatrix_sequential(events, mPi0=0, mEta=0, mGJ=0, use_c_extension
             (mPi0 * mEta * mGJ)**2 * 8 / 1024 / 1024 / 1024., "GB")
       print("Reduce the number of moments or split M into subblocks.")
       return 0,0
+   YmomPi0 = intree['YmomPi0'].array(array_cache=upcache).to_numpy()
+   YmomEta = intree['YmomEta'].array(array_cache=upcache).to_numpy()
+   YmomGJ = intree['YmomGJ'].array(array_cache=upcache).to_numpy()
+   try:
+      YmomPi0_ = intree['YmomPi0_'].array(array_cache=upcache).to_numpy()
+      YmomEta_ = intree['YmomEta_'].array(array_cache=upcache).to_numpy()
+      YmomGJ_ = intree['YmomGJ_'].array(array_cache=upcache).to_numpy()
+   except:
+      YmomPi0_ = YmomPi0
+      YmomEta_ = YmomEta
+      YmomGJ_ = YmomGJ
    mPi0_, mEta_, mGJ_ = mPi0, mEta, mGJ
    M = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
    Mvar = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
@@ -177,7 +177,8 @@ def buildMomentsMatrix_sequential(events, mPi0=0, mEta=0, mGJ=0, use_c_extension
                      Mvar[m * mGJ : (m+1) * mGJ, m_ * mGJ_ : (m_+1) * mGJ_] += M_Pi0_Eta**2 * Mvar_GJ
    return M, Mvar
 
-def buildMomentsMatrixSlice1(events, M, Mvar, iPi0, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_):
+def buildMomentsMatrixSlice1(events, M, Mvar, iPi0, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_,
+                             YmomPi0, YmomPi0_, YmomEta, YmomEta_, YmomGJ, YmomGJ_):
    """
    Builds a slice of M and Mvar, for a single Pi0 moment.
    """
@@ -193,7 +194,8 @@ def buildMomentsMatrixSlice1(events, M, Mvar, iPi0, mPi0, mEta, mGJ, mPi0_, mEta
       C_buildMomentsMatrix.add_event(M_slice, Ymom, Ymom_)
       C_buildMomentsMatrix.add_event(Mvar_slice, Ysqr, Ysqr_)
 
-def buildMomentsMatrixSlice2(events, M, Mvar, iPi0, iEta, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_):
+def buildMomentsMatrixSlice2(events, M, Mvar, iPi0, iEta, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_,
+                             YmomPi0, YmomPi0_, YmomEta, YmomEta_, YmomGJ, YmomGJ_):
    """
    Builds a smaller slice of M and Mvar, for a single Pi0,Eta moment pair.
    """
@@ -224,6 +226,12 @@ def buildMomentsMatrix_threaded(events, mPi0=0, mEta=0, mGJ=0, threading_split_l
             (mPi0 * mEta * mGJ)**2 * 8 / 1024 / 1024 / 1024., "GB")
       print("Reduce the number of moments or split M into subblocks.")
       return 0,0
+   YmomPi0 = intree['YmomPi0'].array(array_cache=upcache).to_numpy()
+   YmomPi0_ = intree['YmomPi0_'].array(array_cache=upcache).to_numpy()
+   YmomEta = intree['YmomEta'].array(array_cache=upcache).to_numpy()
+   YmomEta_ = intree['YmomEta_'].array(array_cache=upcache).to_numpy()
+   YmomGJ = intree['YmomGJ'].array(array_cache=upcache).to_numpy()
+   YmomGJ_ = intree['YmomGJ_'].array(array_cache=upcache).to_numpy()
    mPi0_, mEta_, mGJ_ = mPi0, mEta, mGJ
    M = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
    Mvar = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
@@ -232,14 +240,16 @@ def buildMomentsMatrix_threaded(events, mPi0=0, mEta=0, mGJ=0, threading_split_l
    threads = []
    if threading_split_level == 1:
       for iPi0 in range(mPi0):
-         args = (events, M, Mvar, iPi0, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_)
+         args = (events, M, Mvar, iPi0, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_,
+                 YmomPi0, YmomPi0_, YmomEta, YmomEta_, YmomGJ, YmomGJ_)
          t = threading.Thread(target=buildMomentsMatrixSlice1, args=args)
          threads.append(t)
          t.start()
    else:
       for iPi0 in range(mPi0):
          for iEta in range(mEta):
-            args = (events, M, Mvar, iPi0, iEta, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_)
+            args = (events, M, Mvar, iPi0, iEta, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_,
+                    YmomPi0, YmomPi0_, YmomEta, YmomEta_, YmomGJ, YmomGJ_)
             t = threading.Thread(target=buildMomentsMatrixSlice2, args=args)
             threads.append(t)
             t.start()
