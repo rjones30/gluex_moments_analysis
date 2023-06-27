@@ -86,6 +86,8 @@ def select_events(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=0,
       columns['mom'] = "model1moment"
       if "YmomGJ_" in intree:
          columns['Y'] = "YmomGJ_"
+      else:
+         columns['Y'] = "YmomGJ"
 
    decomp = ThreadPoolExecutor(32)
    arrays = intree.arrays(columns.values(), entry_start=start, entry_stop=stop,
@@ -131,16 +133,21 @@ def compute_moments(events, mPi0=0, mEta=0, mGJ=0, weights=[], use_generated=0):
       columns['Y'] = "YmomGJ"
 
    decomp = ThreadPoolExecutor(32)
-   arrays = intree.arrays(columns.values(), entry_start=start, entry_stop=stop,
+   arrays = intree.arrays(columns.values(), 
                           decompression_executor=decomp, array_cache=upcache,
                           library="np")
 
    YmomGJ = arrays[columns['Y']]
    moments = np.zeros([mPi0 * mEta * mGJ], dtype=float)
    momentsvar = np.zeros([mPi0 * mEta * mGJ], dtype=float)
-   for iev in events:
-      moments += YmomGJ[iev]
-      momentsvar += np.square(YmomGJ[iev])
+   for i in range(len(events)):
+      iev = events[i]
+      if weights:
+         moments += YmomGJ[iev] * weights[i]
+         momentsvar += np.square(YmomGJ[iev] * weights[i])
+      else:
+         moments += YmomGJ[iev]
+         momentsvar += np.square(YmomGJ[iev])
    return moments,momentsvar
 
 def buildMomentsMatrix_sequential(events, mPi0=0, mEta=0, mGJ=0, use_c_extension_library=False):
@@ -165,7 +172,7 @@ def buildMomentsMatrix_sequential(events, mPi0=0, mEta=0, mGJ=0, use_c_extension
       columns['YmomGJ_'] = "YmomGJ_"
 
    decomp = ThreadPoolExecutor(32)
-   arrays = intree.arrays(columns.values(), entry_start=start, entry_stop=stop,
+   arrays = intree.arrays(columns.values(),
                           decompression_executor=decomp, array_cache=upcache,
                           library="np")
 
@@ -258,7 +265,7 @@ def buildMomentsMatrix_threaded(events, mPi0=0, mEta=0, mGJ=0, threading_split_l
       columns['YmomGJ_'] = "YmomGJ_"
 
    decomp = ThreadPoolExecutor(32)
-   arrays = intree.arrays(columns.values(), entry_start=start, entry_stop=stop,
+   arrays = intree.arrays(columns.values(),
                           decompression_executor=decomp, array_cache=upcache,
                           library="np")
 

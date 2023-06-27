@@ -278,7 +278,7 @@ def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
       acc_events += events
       tstep1c = time.perf_counter()
       print(f"  select mock data sample: {tstep1c-tstep1b}s")
-      mom,var = bmm.compute_moments(events, mPi0=1, mEta=1, weights=weights)
+      mom,var = bmm.compute_moments(events, mPi0=1, mEta=1)
       try:
         samplemom += mom
         samplevar += var
@@ -290,9 +290,9 @@ def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
       print(f"  total sample creation time: {tstop1-tstart1}s")
     f5 = h5py.File("Msample.h5", "w")
     f5.create_dataset("sample_moment", data=samplemom)
-    f5.create_dataset("refer_moment", data=refermom)
+    f5.create_dataset("reference_moment", data=refermom)
     f5.create_dataset("sample_variance", data=samplevar)
-    f5.create_dataset("refer_variance", data=refervar)
+    f5.create_dataset("reference_variance", data=refervar)
     f5.close()
 
   try:
@@ -310,7 +310,7 @@ def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
     acc_events = []
     gen_events = []
     for i in acceptance_subset:
-      tstart2 = time.prec_counter()
+      tstart2 = time.perf_counter()
       bmm.open(f"../etapi0_moments_x10_{i}.root:etapi0_moments")
       events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
                                          abst_limits=abst_limits)
@@ -322,14 +322,14 @@ def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
       except:
         M = M_
         Mvar = Mvar_
-      tstep2a = time.prec_counter()
+      tstep2a = time.perf_counter()
       print(f"  built M matrix sum in {tstep2a-tstart2}s")
       bmm.open(f"../generated_moments_x10_{i}.root:etapi0_moments")
       events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
                                          abst_limits=abst_limits)
       gen_events += events
-      tstop2 = time.prec_counter()
-      print("f  total time to compute M matrix: {tstop2-tstart2}s")
+      tstop2 = time.perf_counter()
+      print(f"  total time to compute M matrix: {tstop2-tstart2}s")
       """ disable this, unless you need to check the orthonormality of the moments
       M_,Mvar_ = bmm.buildMomentsMatrix_threaded(events, mPi0=1, mEta=1)
       try:
@@ -361,9 +361,11 @@ def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
   correctvar = np.diag(Minv @ np.diag(samplevar) @ np.transpose(Minv))
 
   # transform from spherical basis to support vector moments
-  if True:
+  if False:
     samplemom = np.transpose(v) @ samplemom
     samplevar = np.diag(np.transpose(v) @ np.diag(samplevar) @ v)
+    correctmom = np.transpose(v) @ correct
+    correctvar = np.diag(np.transpose(v) @ np.diag(correct) @ v)
     refermom = np.transpose(v) @ refermom
     refervar = np.diag(np.transpose(v) @ np.diag(refervar) @ v)
 
