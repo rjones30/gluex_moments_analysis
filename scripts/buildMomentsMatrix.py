@@ -26,6 +26,8 @@ import threading
 import h5py
 import sys
 
+from concurrent.futures import ThreadPoolExecutor
+
 def usage():
   print("usage: >>> import buildMomentsMatrix as bmm")
   print("  >>> bmm.open('etapi0_moments_0.root:etapi0_moments')")
@@ -65,65 +67,81 @@ def open(intree_name):
    mPi0 = intree['momentsPi0'].array()[0]
    return intree
 
-def select_events(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=0, count=-1, start=0, maxweight=0):
+def select_events(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=0, 
+                  start=0, stop=None, maxweight=0, use_generated=0):
    """
    Select a subset of events from the most recently loaded tree, respecting the
    the specified limits in massEtaPi0 and abst, starting at event start and continuing
-   for count events. If model > 0 then perform accept-reject on the model weight factor,
-   otherwise all events are accepted.
+   until event stop. If maxweight > 0 then perform accept-reject on the model weight,
+   otherwise all events are accepted. Return a list of selected event numbers and
+   their weights. If maxweight=0 then all weights are zero.
    """
    events = []
-   massEtaPi0 = intree['massEtaPi0'].array(array_cache=upcache).to_numpy()
-   abst = intree['abst'].array(array_cache=upcache).to_numpy()
-   if count < 0:
-      count = len(massEtaPi0)
+   weights = []
+   columns = {'mX': "massEtaPi0", '|t|': "abst"}
+   if use_generated and "massEtaPi0_" in intree:
+      columns['mX'] = "massEtaPi0_"
+      columns['|t|'] = "abst_"
    if model == 1:
-      YmomGJ = intree['YmomGJ'].array(array_cache=upcache).to_numpy()
-      model1moment = intree['model1moment'].array(array_cache=upcache).to_numpy()
-      weight = np.zeros([massEtaPi0.shape[0]], dtype=float)
-      for i in range(start, start + count):
-         if massEtaPi0[i] > massEtaPi0_limits[0] and massEtaPi0[i] < massEtaPi0_limits[1]:
-            if abst[i] > abst_limits[0] and abst[i] < abst_limits[1]:
-               weight[i] = np.dot(YmomGJ[i], model1moment[i])
-               if weight[i] <= 0:
-                  print("error in select_events: non-positive event weight found",
-                        weight[i], model1moment[i],YmomGJ[i])
-                  return []
-               elif weight[i] > maxweight and maxweight > 0:
-                  print("error in select_events: event with weight > maxweight found",
-                        weight[i], model1moment[i],YmomGJ[i])
-                  return []
-      if maxweight == 0:
-         maxweight = max(weight)
-      print("maxweight =", maxweight)
-   for i in range(start, start + count):
+      columns['mom'] = "model1moment"
+      if "YmomGJ_" in intree:
+         columns['Y'] = "YmomGJ_"
+
+   decomp = ThreadPoolExecutor(32)
+   arrays = intree.arrays(columns.values(), entry_start=start, entry_stop=stop,
+                          decompression_executor=decomp, array_cache=upcache,
+                          library="np")
+
+   massEtaPi0 = arrays[columns['mX']]
+   abst = arrays[columns['|t|']]
+   if model == 1:
+      YmomGJ = arrays[columns['Y']]
+      model1moment = arrays[columns['mom']]
+   for i in range(len(massEtaPi0)):
       if massEtaPi0[i] > massEtaPi0_limits[0] and massEtaPi0[i] < massEtaPi0_limits[1]:
          if abst[i] > abst_limits[0] and abst[i] < abst_limits[1]:
-            if model == 1 and weight[i] < maxweight * np.random.uniform():
-               continue
+            weight = 0
+            if model == 1:
+               weight = np.dot(YmomGJ[i], model1moment[i])
+               if weight <= 0:
+                  print("error in select_events: non-positive event weight found",
+                        weight, model1moment[i], YmomGJ[i])
+                  return [],[]
+               elif weight > maxweight and maxweight > 0:
+                  print("error in select_events: event with weight > maxweight found",
+                        weight, model1moment[i], YmomGJ[i])
+                  return [],[]
+               elif weight < maxweight * np.random.uniform():
+                  continue
             events.append(i)
-   return events
+            weights.append(weight)
+   return events,weights
 
-def compute_moments(events, mPi0=0, mEta=0, mGJ=0, use_generated=0):
+def compute_moments(events, mPi0=0, mEta=0, mGJ=0, weights=[], use_generated=0):
    if mPi0 == 0:
       mPi0 = globals()['mPi0']
    if mEta == 0:
       mEta = globals()['mEta']
    if mGJ == 0:
       mGJ = globals()['mGJ']
+   columns = {}
+   if use_generated and "YmomGJ_" in intree:
+      columns['Y'] = "YmomGJ_"
+   else:
+      columns['Y'] = "YmomGJ"
+
+   decomp = ThreadPoolExecutor(32)
+   arrays = intree.arrays(columns.values(), entry_start=start, entry_stop=stop,
+                          decompression_executor=decomp, array_cache=upcache,
+                          library="np")
+
+   YmomGJ = arrays[columns['Y']]
    moments = np.zeros([mPi0 * mEta * mGJ], dtype=float)
    momentsvar = np.zeros([mPi0 * mEta * mGJ], dtype=float)
-   if use_generated:
-      try:
-         YmomGJ = intree['YmomGJ_'].array(array_cache=upcache).to_numpy()
-      except:
-         YmomGJ = intree['YmomGJ'].array(array_cache=upcache).to_numpy()
-   else:
-      YmomGJ = intree['YmomGJ'].array(array_cache=upcache).to_numpy()
    for iev in events:
       moments += YmomGJ[iev]
       momentsvar += np.square(YmomGJ[iev])
-   return moments, momentsvar
+   return moments,momentsvar
 
 def buildMomentsMatrix_sequential(events, mPi0=0, mEta=0, mGJ=0, use_c_extension_library=False):
    """
@@ -140,17 +158,24 @@ def buildMomentsMatrix_sequential(events, mPi0=0, mEta=0, mGJ=0, use_c_extension
             (mPi0 * mEta * mGJ)**2 * 8 / 1024 / 1024 / 1024., "GB")
       print("Reduce the number of moments or split M into subblocks.")
       return 0,0
-   YmomPi0 = intree['YmomPi0'].array(array_cache=upcache).to_numpy()
-   YmomEta = intree['YmomEta'].array(array_cache=upcache).to_numpy()
-   YmomGJ = intree['YmomGJ'].array(array_cache=upcache).to_numpy()
-   try:
-      YmomPi0_ = intree['YmomPi0_'].array(array_cache=upcache).to_numpy()
-      YmomEta_ = intree['YmomEta_'].array(array_cache=upcache).to_numpy()
-      YmomGJ_ = intree['YmomGJ_'].array(array_cache=upcache).to_numpy()
-   except:
-      YmomPi0_ = YmomPi0
-      YmomEta_ = YmomEta
-      YmomGJ_ = YmomGJ
+   columns = {'YmomPi0': "YmomPi0", 'YmomEta': "YmomEta", 'YmomGJ': "YmomGJ"}
+   if "YmomPi0_" in intree:
+      columns['YmomPi0_'] = "YmomPi0_"
+      columns['YmomEta_'] = "YmomEta_"
+      columns['YmomGJ_'] = "YmomGJ_"
+
+   decomp = ThreadPoolExecutor(32)
+   arrays = intree.arrays(columns.values(), entry_start=start, entry_stop=stop,
+                          decompression_executor=decomp, array_cache=upcache,
+                          library="np")
+
+   YmomPi0 = arrays[columns['YmomPi0']]
+   YmomEta = arrays[columns['YmomEta']]
+   YmomGJ = arrays[columns['YmomGJ']]
+   if 'YmomPi0_' in columns:
+      YmomPi0_ = arrays[columns['YmomPi0_']]
+      YmomEta_ = arrays[columns['YmomEta_']]
+      YmomGJ_ = arrays[columns['YmomGJ_']]
    mPi0_, mEta_, mGJ_ = mPi0, mEta, mGJ
    M = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
    Mvar = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
@@ -226,12 +251,24 @@ def buildMomentsMatrix_threaded(events, mPi0=0, mEta=0, mGJ=0, threading_split_l
             (mPi0 * mEta * mGJ)**2 * 8 / 1024 / 1024 / 1024., "GB")
       print("Reduce the number of moments or split M into subblocks.")
       return 0,0
-   YmomPi0 = intree['YmomPi0'].array(array_cache=upcache).to_numpy()
-   YmomPi0_ = intree['YmomPi0_'].array(array_cache=upcache).to_numpy()
-   YmomEta = intree['YmomEta'].array(array_cache=upcache).to_numpy()
-   YmomEta_ = intree['YmomEta_'].array(array_cache=upcache).to_numpy()
-   YmomGJ = intree['YmomGJ'].array(array_cache=upcache).to_numpy()
-   YmomGJ_ = intree['YmomGJ_'].array(array_cache=upcache).to_numpy()
+   columns = {'YmomPi0': "YmomPi0", 'YmomEta': "YmomEta", 'YmomGJ': "YmomGJ"}
+   if "YmomPi0_" in intree:
+      columns['YmomPi0_'] = "YmomPi0_"
+      columns['YmomEta_'] = "YmomEta_"
+      columns['YmomGJ_'] = "YmomGJ_"
+
+   decomp = ThreadPoolExecutor(32)
+   arrays = intree.arrays(columns.values(), entry_start=start, entry_stop=stop,
+                          decompression_executor=decomp, array_cache=upcache,
+                          library="np")
+
+   YmomPi0 = arrays[columns['YmomPi0']]
+   YmomEta = arrays[columns['YmomEta']]
+   YmomGJ = arrays[columns['YmomGJ']]
+   if 'YmomPi0_' in columns:
+      YmomPi0_ = arrays[columns['YmomPi0_']]
+      YmomEta_ = arrays[columns['YmomEta_']]
+      YmomGJ_ = arrays[columns['YmomGJ_']]
    mPi0_, mEta_, mGJ_ = mPi0, mEta, mGJ
    M = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
    Mvar = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)

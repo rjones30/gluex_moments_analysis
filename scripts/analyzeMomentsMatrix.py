@@ -13,6 +13,7 @@ import ROOT
 import math
 import threading
 import scipy.linalg
+import time
 
 import buildMomentsMatrix as bmm
 
@@ -26,6 +27,9 @@ def usage():
   print("  >>> h = ana.histogram_M_offdiagonal()")
   print("  >>> h = ana.histogram_eigenvalues(name, title, w)")
   print("  >>> h = ana.histogram_moments(name, title, moments, errors)")
+  print("  >>> h = ana.hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99),")
+  print("                      sample_subset=range(10), acceptance_subset=range(10),")
+  print("                      model=1, Mmatrix=\"Msaved.h5\")")
 
 if len(sys.argv) < 2 or sys.argv[1][0] == '-':
   usage()
@@ -40,11 +44,7 @@ def open(h5input):
   M = f5['Moments']
   Mvar = f5['Moments_variance']
   h5inputs[0] = f5
-  try:
-    accepted_subset = f5['accepted_subset'][()]
-  except:
-    accepted_subset = 0
-  return accepted_subset
+  return f5
 
 def do_svd(h5input=0, lower=True):
   if not h5input in h5inputs:
@@ -55,13 +55,14 @@ def do_svd(h5input=0, lower=True):
       return 0
   return scipy.linalg.eigh(M, lower=lower)
 
-def histogram_M_diagonal(h5input=0, MCsample_size=1e7):
+def histogram_M_diagonal(h5input=0):
   if not h5input in h5inputs:
     try:
-      h5inputs[open(h5input)] = 1
+      h5inputs[h5input] = open(h5input)
     except:
       print("unable to open input moments file", h5input)
       return 0
+  MCsample_size = h5inputs[h5input]['generated_subset'][()]
   mdim = M.shape[0]
   hMdiag = ROOT.TH1D("hMdiag", "M diagonal elements", mdim, 0, mdim)
   hMdiag.GetXaxis().SetTitle("moment index")
@@ -93,13 +94,14 @@ def histogram_M_diagonal(h5input=0, MCsample_size=1e7):
   print(largerr[0], "+/-", largerr[1])
   return hMdiag
 
-def histogram_M_diagonal_GJ0(h5input=0, MCsample_size=1e7):
+def histogram_M_diagonal_GJ0(h5input=0):
   if not h5input in h5inputs:
     try:
-      h5inputs[open(h5input)] = 1
+      h5inputs[h5input] = open(h5input)
     except:
       print("unable to open input moments file", h5input)
       return 0
+  MCsample_size = h5inputs[h5input]['generated_subset'][()]
   mdim = M.shape[0]
   hMdiag = ROOT.TH1D("hMdiagGJ0", "M diagonal elements with L(GJ)=0", 768, 0, 768)
   hMdiag.GetXaxis().SetTitle("moment index")
@@ -112,13 +114,14 @@ def histogram_M_diagonal_GJ0(h5input=0, MCsample_size=1e7):
       hMdiag.SetBinError(int(m/49)+1, Mvar[m,m]**0.5 * normfact)
   return hMdiag
 
-def histogram_M_diagonal_GJ0_Eta0(h5input=0, MCsample_size=1e7):
+def histogram_M_diagonal_GJ0_Eta0(h5input=0):
   if not h5input in h5inputs:
     try:
-      h5inputs[open(h5input)] = 1
+      h5inputs[h5input] = open(h5input)
     except:
       print("unable to open input moments file", h5input)
       return 0
+  MCsample_size = h5inputs[h5input]['generated_subset'][()]
   mdim = M.shape[0]
   hMdiag = ROOT.TH1D("hMdiagGJ0Eta0", "M diagonal elements with L(GJ)=0, L(Eta)=0", 28, 0, 28)
   hMdiag.GetXaxis().SetTitle("moment index")
@@ -168,7 +171,10 @@ def histogram_M_offdiagonal(h5input=0):
   ithread = 0
   threads = []
   for m in range(mdim):
-    t = threading.Thread(target=ROOT.fill_M_histograms, args=(Marray, Mvararray, m, mdim, hMabove[ithread], hMbelow[ithread], hEabove[ithread], hEbelow[ithread]))
+    args = (Marray, Mvararray, m, mdim,
+            hMabove[ithread], hMbelow[ithread], 
+            hEabove[ithread], hEbelow[ithread])
+    t = threading.Thread(target=ROOT.fill_M_histograms, args=args)
     if ithread < len(threads):
       ierr = threads[ithread].join()
       threads[ithread] = t
@@ -230,14 +236,65 @@ def histogram_moments(name, title, moments, errors):
   h.GetYaxis().SetTitle("sample moment")
   return h
 
-def list_boxes():
-  tmlist = {'all': "etapi0_moments_all.h5"}
-  for tlim in ("t(0.0,0.2)", "t(0.2,0.5)", "t(0.5,1.0)"):
-    for mlim in ("m(1.0,1.2)", "m(1.2,1.4)", "m(1.4,1.6)", "m(1.6,1.8)", "m(1.8,2.0)"):
-      tmlist[tlim+mlim] = f"etapi0_moments_{mlim}_{tlim}.h5"
-  return tmlist
+def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1, 
+            sample_subset=range(5), acceptance_subset=range(5,10),
+            Mmatrix="Msaved.h5"):
+  try:
+    f5 = h5py.File("Msample.h5")
+    samplemom = f5['sample_moment']
+    refermom = f5['reference_moment']
+    samplevar = f5['sample_variance']
+    refervar = f5['reference_variance']
+  except:
+    try:
+      f5.close()
+    except:
+      pass
+    print("hinhout regenerating Msample.h5")
+    acc_events = []
+    gen_events = []
+    for i in sample_subset:
+      tstart1 = time.perf_counter()
+      bmm.open(f"../generated_moments_x10_{i}.root:etapi0_moments")
+      events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
+                                         abst_limits=abst_limits, model=1)
+      gen_events += events
+      maxweight = max(weights) * 1.1
+      tstep1a = time.perf_counter()
+      print(f"  select generated events: {tstep1a-tstart1}s")
+      mom,var = bmm.compute_moments(events, mPi0=1, mEta=1, weights=weights)
+      try:
+        refermom += mom
+        refervar += var
+      except:
+        refermom = mom
+        refervar = var
+      tstep1b = time.perf_counter()
+      print(f"  compute generated moments: {tstep1b-tstep1a}s")
+      bmm.open(f"../etapi0_moments_x10_{i}.root:etapi0_moments")
+      events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
+                                         abst_limits=abst_limits, model=1,
+                                         maxweight=maxweight)
+      acc_events += events
+      tstep1c = time.perf_counter()
+      print(f"  select mock data sample: {tstep1c-tstep1b}s")
+      mom,var = bmm.compute_moments(events, mPi0=1, mEta=1, weights=weights)
+      try:
+        samplemom += mom
+        samplevar += var
+      except:
+        samplemom = mom
+        samplevar = var
+      tstop1 = time.perf_counter()
+      print(f"  compute mock data moments: {tstep1c-tstep1b}s")
+      print(f"  total sample creation time: {tstop1-tstart1}s")
+    f5 = h5py.File("Msample.h5", "w")
+    f5.create_dataset("sample_moment", data=samplemom)
+    f5.create_dataset("refer_moment", data=refermom)
+    f5.create_dataset("sample_variance", data=samplevar)
+    f5.create_dataset("refer_variance", data=refervar)
+    f5.close()
 
-def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1, sample_subset=range(10), maxweight=0):
   try:
     f5 = h5py.File("Msaved.h5")
     M = f5['Moments']
@@ -250,24 +307,31 @@ def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1, sample_subset
     except:
       pass
     print("hinhout regenerating Msaved.h5")
-    acc_union = []
-    gen_union = []
-    for i in sample_subset:
+    acc_events = []
+    gen_events = []
+    for i in acceptance_subset:
+      tstart2 = time.prec_counter()
       bmm.open(f"../etapi0_moments_x10_{i}.root:etapi0_moments")
-      acc_events = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits, abst_limits=abst_limits)
-      M_,Mvar_ = bmm.buildMomentsMatrix_sequential(acc_events, mPi0=1, mEta=1)
-      acc_union += acc_events
+      events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
+                                         abst_limits=abst_limits)
+      M_,Mvar_ = bmm.buildMomentsMatrix_threaded(events, mPi0=1, mEta=1)
+      acc_events += events
       try:
         M += M_
         Mvar += Mvar_
       except:
         M = M_
         Mvar = Mvar_
+      tstep2a = time.prec_counter()
+      print(f"  built M matrix sum in {tstep2a-tstart2}s")
       bmm.open(f"../generated_moments_x10_{i}.root:etapi0_moments")
-      gen_events = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits, abst_limits=abst_limits)
-      gen_union += gen_events
+      events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
+                                         abst_limits=abst_limits)
+      gen_events += events
+      tstop2 = time.prec_counter()
+      print("f  total time to compute M matrix: {tstop2-tstart2}s")
       """ disable this, unless you need to check the orthonormality of the moments
-      M_,Mvar_ = bmm.buildMomentsMatrix_sequential(gen_events, mPi0=1, mEta=1)
+      M_,Mvar_ = bmm.buildMomentsMatrix_threaded(events, mPi0=1, mEta=1)
       try:
         Mgen += M_
         Mgenvar += Mvar_
@@ -276,58 +340,33 @@ def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1, sample_subset
         Mgenvar = Mvar_
     bmm.save_output(Mgen, Mgenvar, gen_union, gen_union, "Mperfect.h5")
       """
-    bmm.save_output(M, Mvar, acc_union, gen_union, "Msaved.h5")
-    Nacc = len(acc_union)
-    Ngen = len(gen_union)
+    bmm.save_output(M, Mvar, acc_events, gen_events, "Msaved.h5")
+    Nacc = len(acc_events)
+    Ngen = len(gen_events)
 
   M *= (4 * math.pi)**3 / Ngen
   Mvar *= ((4 * math.pi)**3 / Ngen)**2
 
-  try:
-    f5 = h5py.File("Msample.h5")
-    samplemom = f5['sample_moment']
-    model1mom = f5['model1_moment']
-    samplevar = f5['sample_variance']
-    model1var = f5['model1_variance']
-  except:
-    try:
-      f5.close()
-    except:
-      pass
-    print("hinhout regenerating Msample.h5")
-    acc_union = []
-    gen_union = []
-    for i in sample_subset:
-      bmm.open(f"../etapi0_moments_x10_{i}.root:etapi0_moments")
-      acc_events = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits, abst_limits=abst_limits, model=1, maxweight=maxweight)
-      samplemom_, samplevar_ = bmm.compute_moments(acc_events, mPi0=1, mEta=1, use_generated=1)
-      try:
-        samplemom += samplemom_
-        samplevar += samplevar_
-      except:
-        samplemom = samplemom_
-        samplevar = samplevar_
-      acc_union += acc_events
-      bmm.open(f"../generated_moments_x10_{i}.root:etapi0_moments")
-      gen_events = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits, abst_limits=abst_limits, model=1, maxweight=maxweight)
-      model1mom_, model1var_ = bmm.compute_moments(gen_events, mPi0=1, mEta=1)
-      try:
-        model1mom += model1mom_
-        model1var += model1var_
-      except:
-        model1mom = model1mom_
-        model1var = model1var_
-      gen_union += gen_events
-    f5 = h5py.File("Msample.h5", "w")
-    f5.create_dataset("sample_moment", data=samplemom)
-    f5.create_dataset("model1_moment", data=model1mom)
-    f5.create_dataset("sample_variance", data=samplevar)
-    f5.create_dataset("model1_variance", data=model1var)
-    f5.close()
+  if Mmatrix != "Msaved.h5":
+    f5 = h5py.File(Mmatrix)
+    Mregion = f5['Moments']
+  else:
+    Mregion = M
+  w,v = np.linalg.eigh(Mregion)
+  w = np.flip(w,0)
+  v = np.flip(v,1)
 
-  Minv = 2 * np.linalg.inv(M + np.transpose(M))
+  Minv = np.linalg.inv(M)
   correctmom = Minv @ samplemom
   correctvar = np.diag(Minv @ np.diag(samplevar) @ np.transpose(Minv))
+
+  # transform from spherical basis to support vector moments
+  if True:
+    samplemom = np.transpose(v) @ samplemom
+    samplevar = np.diag(np.transpose(v) @ np.diag(samplevar) @ v)
+    refermom = np.transpose(v) @ refermom
+    refervar = np.diag(np.transpose(v) @ np.diag(refervar) @ v)
+
   Nmom = len(samplemom)
   hsamp = ROOT.TH1D("hsamp", "sample moments, uncorrected", Nmom, 0, Nmom)
   hsamp.GetXaxis().SetTitle("moment index")
@@ -346,9 +385,10 @@ def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1, sample_subset
     hsamp.SetBinError(i+1, samplevar[i]**0.5)
     hcorr.SetBinContent(i+1, correctmom[i])
     hcorr.SetBinError(i+1, correctvar[i]**0.5)
-    hmodel.SetBinContent(i+1, model1mom[i])
-    hmodel.SetBinError(i+1, model1var[i]**0.5)
+    hmodel.SetBinContent(i+1, refermom[i])
+    hmodel.SetBinError(i+1, refervar[i]**0.5)
     hdiff.SetBinContent(i+1, correctmom[i])
     hdiff.SetBinError(i+1, correctvar[i]**0.5)
+  hmodel.Scale(hcorr.GetBinContent(1) / hmodel.GetBinContent(1))
   hdiff.Add(hmodel, -1)
   return hsamp,hcorr,hmodel,hdiff
