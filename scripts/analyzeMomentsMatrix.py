@@ -240,8 +240,8 @@ def histograms_of_moments(Nmoments, basename, basetitle,
                           xtitle, nx, x0, x1, ytitle, ny, y0, y1):
    histograms = []
    for i in range(Nmoments):
-      name = f"{basename}_{i}"
-      title = f"{basetitle} {i}"
+      name = basename.format(i)
+      title = basetitle.format(i)
       h = ROOT.TH2D(name, title, nx, x0, x1, ny, y0, y1)
       h.GetXaxis().SetTitle(xtitle)
       h.GetYaxis().SetTitle(ytitle)
@@ -267,10 +267,10 @@ def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
     print("hinhout regenerating Msample.h5")
     mock_events = []
     gen_events = []
-    h2dmodel = histograms_of_moments(169, "model1", "model 1 moment", 
+    h2dmodel = histograms_of_moments(169, "model1_{0}", "model 1 moment {0}", 
                                      "massEtaPi0 (GeV)", 120, 0.9, 2.1,
                                      "|t| (GeV^2)", 25, 0.0, 2.5)
-    h2dsample = histograms_of_moments(169, "sample", "mock sample moment", 
+    h2dsample = histograms_of_moments(169, "sample_{0}", "mock sample moment {0}", 
                                       "massEtaPi0 (GeV)", 120, 0.9, 2.1,
                                       "|t| (GeV^2)", 25, 0.0, 2.5)
     for i in sample_subset:
@@ -375,23 +375,35 @@ def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
     w = np.flip(w,0)
     v = np.flip(v,1)
 
-    h2dacceptance = histograms_of_moments(169, "accept", "acceptance moment", 
-                                          "massEtaPi0 (GeV)", 120, 0.9, 2.1,
-                                          "|t| (GeV^2)", 25, 0.0, 2.5)
+    h2daccepted = histograms_of_moments(169, "accept_{0}", "acceptance moment {0}", 
+                                        "massEtaPi0 (GeV)", 120, 0.9, 2.1,
+                                        "|t| (GeV^2)", 25, 0.0, 2.5)
+    h2dgenerated = histograms_of_moments(1, "generated", "generated spectrum", 
+                                        "massEtaPi0 (GeV)", 120, 0.9, 2.1,
+                                        "|t| (GeV^2)", 25, 0.0, 2.5)
+    gen_events = []
     for i in acceptance_subset:
       tstart3 = time.perf_counter()
       bmm.open(f"../etapi0_moments_x10_{i}.root:etapi0_moments")
       events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
                                          abst_limits=abst_limits)
-      bmm.histogram_moments(events, h2dacceptance, mPi0=1, mEta=1, svectors=v)
+      bmm.histogram_acceptance(events, h2daccepted, mPi0=1, mEta=1, svectors=v)
+      tstep3a = time.perf_counter()
+      print(f"  time to histogram acceptance moments: {tstep3a-tstart3:.3f}s")
+      bmm.open(f"../generated_moments_x10_{i}.root:etapi0_moments")
+      events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
+                                         abst_limits=abst_limits)
+      gen_events += events
+      bmm.histogram_acceptance(events, h2dgenerated, mPi0=1, mEta=1, mGJ=1)
       tstop3 = time.perf_counter()
-      print(f"  time to histogram acceptance moments: {tstop3-tstart3}s")
+      print(f"  time to histogram generated kinematics: {tstop3-tstep3a:.3f}s")
 
     bmm.save_output(M, Mvar, acc_events, gen_events, "Msaved.h5")
     Nacc = len(acc_events)
     Ngen = len(gen_events)
     f = ROOT.TFile("Msaved.root", "recreate")
-    [h.Write() for h in h2dacceptance]
+    [h.Write() for h in h2daccepted]
+    [h.Write() for h in h2dgenerated]
     f.Close()
 
   M *= (4 * math.pi)**3 / Ngen
