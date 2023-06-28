@@ -150,6 +150,47 @@ def compute_moments(events, mPi0=0, mEta=0, mGJ=0, weights=[], use_generated=0):
          momentsvar += np.square(YmomGJ[iev])
    return moments,momentsvar
 
+def histogram_moments(events, histograms, mPi0=0, mEta=0, mGJ=0,
+                      weights=[], svectors=[], use_generated=0):
+   if mPi0 == 0:
+      mPi0 = globals()['mPi0']
+   if mEta == 0:
+      mEta = globals()['mEta']
+   if mGJ == 0:
+      mGJ = globals()['mGJ']
+   columns = {}
+   columns = {'mX': "massEtaPi0", '|t|': "abst", 'Y': "YmomGJ"}
+   if use_generated and "massEtaPi0_" in intree:
+      columns['mX'] = "massEtaPi0_"
+      columns['|t|'] = "abst_"
+      columns['Y'] = "YmomGJ_"
+
+   decomp = ThreadPoolExecutor(32)
+   arrays = intree.arrays(columns.values(), 
+                          decompression_executor=decomp, array_cache=upcache,
+                          library="np")
+
+   massEtaPi0 = arrays[columns['mX']]
+   abst = arrays[columns['|t|']]
+   YmomGJ = arrays[columns['Y']]
+   for i in range(len(events)):
+      iev = events[i]
+      if len(svectors) > 0:
+         Y = YmomGJ[iev] @ svectors
+      else:
+         Y = YmomGJ[iev]
+      nmom = 0
+      if weights:
+         w = weights[i]
+      else:
+         w = 1
+      for iPi0 in range(mPi0):
+         for iEta in range(mEta):
+            for iGJ in range(mGJ):
+               histograms[nmom].Fill(massEtaPi0[iev], abst[iev], w * YmomGJ[iev][iGJ])
+               nmom += 1
+   return nmom
+
 def buildMomentsMatrix_sequential(events, mPi0=0, mEta=0, mGJ=0, use_c_extension_library=False):
    """
    Single-threaded implementation, for small matrices and checks

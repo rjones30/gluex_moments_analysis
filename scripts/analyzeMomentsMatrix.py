@@ -236,23 +236,43 @@ def histogram_moments(name, title, moments, errors):
   h.GetYaxis().SetTitle("sample moment")
   return h
 
+def histograms_of_moments(Nmoments, basename, basetitle, 
+                          xtitle, nx, x0, x1, ytitle, ny, y0, y1):
+   histograms = []
+   for i in range(Nmoments):
+      name = f"{basename}_{i}"
+      title = f"{basetitle} {i}"
+      h = ROOT.TH2D(name, title, nx, x0, x1, ny, y0, y1)
+      h.GetXaxis().SetTitle(xtitle)
+      h.GetYaxis().SetTitle(ytitle)
+      histograms.append(h)
+   return histograms
+
 def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1, 
             sample_subset=range(5), acceptance_subset=range(5,10),
             Mmatrix="Msaved.h5"):
   try:
     f5 = h5py.File("Msample.h5")
-    samplemom = f5['sample_moment']
-    refermom = f5['reference_moment']
-    samplevar = f5['sample_variance']
-    refervar = f5['reference_variance']
+    samplemom = f5['sample_moment'][:]
+    refermom = f5['reference_moment'][:]
+    samplevar = f5['sample_variance'][:]
+    refervar = f5['reference_variance'][:]
+    mock_events = f5['sample_events'][:]
+    gen_events = f5['generated_events'][:]
   except:
     try:
       f5.close()
     except:
       pass
     print("hinhout regenerating Msample.h5")
-    acc_events = []
+    mock_events = []
     gen_events = []
+    h2dmodel = histograms_of_moments(169, "model1", "model 1 moment", 
+                                     "massEtaPi0 (GeV)", 120, 0.9, 2.1,
+                                     "|t| (GeV^2)", 25, 0.0, 2.5)
+    h2dsample = histograms_of_moments(169, "sample", "mock sample moment", 
+                                      "massEtaPi0 (GeV)", 120, 0.9, 2.1,
+                                      "|t| (GeV^2)", 25, 0.0, 2.5)
     for i in sample_subset:
       tstart1 = time.perf_counter()
       bmm.open(f"../generated_moments_x10_{i}.root:etapi0_moments")
@@ -261,7 +281,7 @@ def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
       gen_events += events
       maxweight = max(weights) * 1.1
       tstep1a = time.perf_counter()
-      print(f"  select generated events: {tstep1a-tstart1}s")
+      print(f"  select generated events: {tstep1a-tstart1:.3f}s")
       mom,var = bmm.compute_moments(events, mPi0=1, mEta=1, weights=weights)
       try:
         refermom += mom
@@ -270,14 +290,17 @@ def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
         refermom = mom
         refervar = var
       tstep1b = time.perf_counter()
-      print(f"  compute generated moments: {tstep1b-tstep1a}s")
+      print(f"  compute generated moments: {tstep1b-tstep1a:.3f}s")
+      bmm.histogram_moments(events, h2dmodel, mPi0=1, mEta=1, weights=weights)
+      tstep1c = time.perf_counter()
+      print(f"  histogram generated moments: {tstep1c-tstep1b:.3f}s")
       bmm.open(f"../etapi0_moments_x10_{i}.root:etapi0_moments")
       events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
                                          abst_limits=abst_limits, model=1,
                                          maxweight=maxweight)
-      acc_events += events
-      tstep1c = time.perf_counter()
-      print(f"  select mock data sample: {tstep1c-tstep1b}s")
+      mock_events += events
+      tstep1d = time.perf_counter()
+      print(f"  select mock data sample: {tstep1d-tstep1c:.3f}s")
       mom,var = bmm.compute_moments(events, mPi0=1, mEta=1)
       try:
         samplemom += mom
@@ -285,20 +308,29 @@ def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
       except:
         samplemom = mom
         samplevar = var
+      tstep1e = time.perf_counter()
+      print(f"  compute mock data moments: {tstep1e-tstep1d:.3f}s")
+      bmm.histogram_moments(events, h2dsample, mPi0=1, mEta=1)
       tstop1 = time.perf_counter()
-      print(f"  compute mock data moments: {tstep1c-tstep1b}s")
-      print(f"  total sample creation time: {tstop1-tstart1}s")
+      print(f"  histogram mock data moments: {tstop1-tstep1e:.3f}s")
+      print(f" *total sample creation time: {tstop1-tstart1:.3f}s")
     f5 = h5py.File("Msample.h5", "w")
     f5.create_dataset("sample_moment", data=samplemom)
     f5.create_dataset("reference_moment", data=refermom)
     f5.create_dataset("sample_variance", data=samplevar)
     f5.create_dataset("reference_variance", data=refervar)
+    f5.create_dataset("sample_events", data=mock_events)
+    f5.create_dataset("generated_events", data=gen_events)
     f5.close()
+    f = ROOT.TFile("Msample.root", "recreate")
+    [h.Write() for h in h2dmodel]
+    [h.Write() for h in h2dsample]
+    f.Close()
 
   try:
     f5 = h5py.File("Msaved.h5")
-    M = f5['Moments']
-    Mvar = f5['Moments_variance']
+    M = f5['Moments'][:]
+    Mvar = f5['Moments_variance'][:]
     Nacc = f5['accepted_subset'][()]
     Ngen = f5['generated_subset'][()]
   except:
@@ -308,7 +340,6 @@ def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
       pass
     print("hinhout regenerating Msaved.h5")
     acc_events = []
-    gen_events = []
     for i in acceptance_subset:
       tstart2 = time.perf_counter()
       bmm.open(f"../etapi0_moments_x10_{i}.root:etapi0_moments")
@@ -322,15 +353,14 @@ def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
       except:
         M = M_
         Mvar = Mvar_
-      tstep2a = time.perf_counter()
-      print(f"  built M matrix sum in {tstep2a-tstart2}s")
+      tstop2 = time.perf_counter()
+      print(f"  time to compute M matrix: {tstop2-tstart2:.3f}s")
+
+      # disable this, unless you need to check the orthonormality of the moments
+      """
       bmm.open(f"../generated_moments_x10_{i}.root:etapi0_moments")
       events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
                                          abst_limits=abst_limits)
-      gen_events += events
-      tstop2 = time.perf_counter()
-      print(f"  total time to compute M matrix: {tstop2-tstart2}s")
-      """ disable this, unless you need to check the orthonormality of the moments
       M_,Mvar_ = bmm.buildMomentsMatrix_threaded(events, mPi0=1, mEta=1)
       try:
         Mgen += M_
@@ -338,11 +368,31 @@ def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
       except:
         Mgen = M_
         Mgenvar = Mvar_
-    bmm.save_output(Mgen, Mgenvar, gen_union, gen_union, "Mperfect.h5")
+    bmm.save_output(Mgen, Mgenvar, gen_events, gen_events, "Mperfect.h5")
       """
+
+    w,v = np.linalg.eigh(M)
+    w = np.flip(w,0)
+    v = np.flip(v,1)
+
+    h2dacceptance = histograms_of_moments(169, "accept", "acceptance moment", 
+                                          "massEtaPi0 (GeV)", 120, 0.9, 2.1,
+                                          "|t| (GeV^2)", 25, 0.0, 2.5)
+    for i in acceptance_subset:
+      tstart3 = time.perf_counter()
+      bmm.open(f"../etapi0_moments_x10_{i}.root:etapi0_moments")
+      events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
+                                         abst_limits=abst_limits)
+      bmm.histogram_moments(events, h2dacceptance, mPi0=1, mEta=1, svectors=v)
+      tstop3 = time.perf_counter()
+      print(f"  time to histogram acceptance moments: {tstop3-tstart3}s")
+
     bmm.save_output(M, Mvar, acc_events, gen_events, "Msaved.h5")
     Nacc = len(acc_events)
     Ngen = len(gen_events)
+    f = ROOT.TFile("Msaved.root", "recreate")
+    [h.Write() for h in h2dacceptance]
+    f.Close()
 
   M *= (4 * math.pi)**3 / Ngen
   Mvar *= ((4 * math.pi)**3 / Ngen)**2
