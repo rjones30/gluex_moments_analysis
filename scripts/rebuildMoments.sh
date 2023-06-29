@@ -42,14 +42,14 @@ function build_moments {
     mspec=$1
     tspec=$2
     workdir="rebuildMoments_${mspec}_${tspec}"
-    rm -rf $workdir || clean_exit "unable to clear space for workdir $workdir"
-    mkdir $workdir || clean_exit "unable to create workdir $workdir"
-    cp src/C_buildMomentsMatrix* $workdir || clean_exit "unable to populate workdir $workdir"
+    #rm -rf $workdir || clean_exit "unable to clear space for workdir $workdir"
+    #mkdir $workdir || clean_exit "unable to create workdir $workdir"
+    #cp src/C_buildMomentsMatrix* $workdir || clean_exit "unable to populate workdir $workdir"
     cd $workdir || clean_exit "unable to descend into workdir $workdir"
     cat >rebuild.py <<EOI
 import sys
 import analyzeMomentsMatrix as ana
-h=ana.hinhout(massEtaPi0_limits=($mspec), abst_limits=($tspec), model=1)
+h=ana.analyze_moments(massEtaPi0_limits=($mspec), abst_limits=($tspec), model=1)
 sys.exit(0)
 EOI
     python3 rebuild.py || clean_exit "script rebuild.py failed"
