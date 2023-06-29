@@ -261,6 +261,7 @@ def analyze_moments(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
     refervar = f5['reference_variance'][:]
     mock_events = f5['sample_events'][:]
     gen_events = f5['generated_events'][:]
+    maxweight = f5['sample_maxweight'][()]
   except:
     try:
       f5.close()
@@ -271,10 +272,10 @@ def analyze_moments(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
     gen_events = []
     h2dmodel = histograms_of_moments(169, "model1_{0}", "model 1 moment {0}", 
                                      "massEtaPi0 (GeV)", 120, 0.9, 2.1,
-                                     "|t| (GeV^2)", 25, 0.0, 2.5)
+                                     "|t| (GeV^2)", 25, 0.0, 1.2)
     h2dsample = histograms_of_moments(169, "sample_{0}", "mock sample moment {0}", 
                                       "massEtaPi0 (GeV)", 120, 0.9, 2.1,
-                                      "|t| (GeV^2)", 25, 0.0, 2.5)
+                                      "|t| (GeV^2)", 25, 0.0, 1.2)
     for i in sample_subset:
       tstart1 = time.perf_counter()
       bmm.open(f"../generated_moments_x10_{i}.root:etapi0_moments")
@@ -323,6 +324,7 @@ def analyze_moments(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
     f5.create_dataset("reference_variance", data=refervar)
     f5.create_dataset("sample_events", data=mock_events)
     f5.create_dataset("generated_events", data=gen_events)
+    f5.create_dataset("sample_maxweight", data=maxweight)
     f5.close()
     f = ROOT.TFile("Msample.root", "recreate")
     [h.Write() for h in h2dmodel]
@@ -377,12 +379,13 @@ def analyze_moments(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
     w = np.flip(w,0)
     v = np.flip(v,1)
 
-    h2daccepted = histograms_of_moments(169, "accept_{0}", "acceptance moment {0}", 
+    h2daccepted = histograms_of_moments(169, "accept_{0}",
+                                        "acceptance for support vector {0}", 
                                         "massEtaPi0 (GeV)", 120, 0.9, 2.1,
-                                        "|t| (GeV^2)", 25, 0.0, 2.5)
+                                        "|t| (GeV^2)", 25, 0.0, 1.2)
     h2dgenerated = histograms_of_moments(1, "generated", "generated spectrum", 
                                         "massEtaPi0 (GeV)", 120, 0.9, 2.1,
-                                        "|t| (GeV^2)", 25, 0.0, 2.5)
+                                        "|t| (GeV^2)", 25, 0.0, 1.2)
     gen_events = []
     for i in acceptance_subset:
       tstart3 = time.perf_counter()
@@ -473,40 +476,48 @@ def model1_corrected_moment(imoment):
     M = f5['Moments'][:]
     w,v = np.linalg.eigh(M)
     v = np.flip(v,1)
+    Minv = np.linalg.inv(M)
     Nmoments = M.shape[0]
-    try:
-      fsaved = ROOT.TFile(datadir + "/Msaved.root")
-      fsample = ROOT.TFile(datadir + "/Msample.root")
-    except:
-      continue
-    h2daccept = fsaved.Get(f"accept_{imoment}")
+    fsaved = ROOT.TFile(datadir + "/Msaved.root")
     h2dgenerated = fsaved.Get(f"generated")
-    try:
-     h2daccept.Divide(h2dgenerated)
-    except:
-     print(f"bad Divide: tbin={tbin},mbin={mbin}, h2daccept={h2daccept}, h2dgenerated={h2dgenerated}")
+    fsample = ROOT.TFile(datadir + "/Msample.root")
     h2dmodel1 = fsample.Get(f"model1_{imoment}")
     h2dsample = fsample.Get(f"sample_{imoment}")
     h2dcorrect = h2dsample.Clone(f"correct_{imoment}")
+    h2dnormal = h2dsample.Clone(f"normal_0")
     h2dcorrect.Reset()
+    h2dnormal.Reset()
     for k in range(Nmoments):
+      hk = fsample.Get(f"sample_{k}")
+      h2dcorrect.Add(hk, Minv[imoment,k])
+      h2dnormal.Add(hk, Minv[0,k])
+      """
       h2dsupport = h2dsample.Clone(f"support_{k}")
       h2dsupport.Reset()
       for j in range(Nmoments):
         hj = fsample.Get(f"sample_{j}")
         h2dsupport.Add(hj, v[j][k])
+      h2daccept = fsaved.Get(f"accept_{k}")
+      h2daccept.Divide(h2dgenerated)
       h2dsupport.Divide(h2daccept)
       h2dcorrect.Add(h2dsupport, v[k][imoment])
+      h2dnormal.Add(h2dsupport, v[k][0])
+      """
+    normfact = fsample.Get(f"model1_0").Integral() / h2dnormal.Integral()
     try:
-      haccept.Add(h2daccept)
       hgenerated.Add(h2dgenerated)
       hmodel1.Add(h2dmodel1)
-      hsample.Add(h2dsample)
-      hcorrect.Add(h2dcorrect)
+      hsample.Add(h2dsample, normfact)
+      hcorrect.Add(h2dcorrect, normfact)
     except:
-      haccept = h2daccept.Clone(f"haccept_{imoment}")
       hgenerated = h2dgenerated.Clone(f"hgenerated")
       hmodel1 = h2dmodel1.Clone(f"hmodel1_{imoment}")
-      hsample = h2dsample.Clone(f"hmodel1_{imoment}")
-      hcorrect = h2dcorrect.Clone(f"hmodel1_{imoment}")
+      hsample = h2dsample.Clone(f"hsample_{imoment}")
+      hcorrect = h2dcorrect.Clone(f"hcorrect_{imoment}")
+      hsample.Scale(normfact)
+      hcorrect.Scale(normfact)
+      hgenerated.SetDirectory(0)
+      hmodel1.SetDirectory(0)
+      hsample.SetDirectory(0)
+      hcorrect.SetDirectory(0)
   return hsample,hcorrect,hmodel1,hgenerated
