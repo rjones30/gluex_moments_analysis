@@ -27,9 +27,11 @@ def usage():
   print("  >>> h = ana.histogram_M_offdiagonal()")
   print("  >>> h = ana.histogram_eigenvalues(name, title, w)")
   print("  >>> h = ana.histogram_moments(name, title, moments, errors)")
-  print("  >>> h = ana.hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99),")
-  print("                      sample_subset=range(10), acceptance_subset=range(10),")
-  print("                      model=1, Mmatrix=\"Msaved.h5\")")
+  print("  >>> h = ana.analyze_moments(massEtaPi0_limits=(0,99), abst_limits=(0,99),")
+  print("                              sample_subset=range(10), acceptance_subset=range(10),")
+  print("                              model=1, Mmatrix=\"Msaved.h5\")")
+  print(" >>> kinbins = ana.standard_kinematic_bins()")
+  print(" >>> h = ana.model1_corrected_moment(imoment)")
 
 if len(sys.argv) < 2 or sys.argv[1][0] == '-':
   usage()
@@ -248,9 +250,9 @@ def histograms_of_moments(Nmoments, basename, basetitle,
       histograms.append(h)
    return histograms
 
-def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1, 
-            sample_subset=range(5), acceptance_subset=range(5,10),
-            Mmatrix="Msaved.h5"):
+def analyze_moments(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1, 
+                    sample_subset=range(5), acceptance_subset=range(5,10),
+                    Mmatrix="Msaved.h5"):
   try:
     f5 = h5py.File("Msample.h5")
     samplemom = f5['sample_moment'][:]
@@ -456,3 +458,55 @@ def hinhout(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
   hmodel.Scale(hcorr.GetBinContent(1) / hmodel.GetBinContent(1))
   hdiff.Add(hmodel, -1)
   return hsamp,hcorr,hmodel,hdiff
+
+def standard_kinematic_bins():
+  kinbins = []
+  for tbin in ((0.0,0.3), (0.3,0.6), (0.6,1.2)):
+    for mbin in ((0.9,1.2), (1.2,1.5), (1.5,1.8), (1.8,2.1)):
+      kinbins.append((tbin,mbin))
+  return kinbins
+
+def model1_corrected_moment(imoment):
+  for tbin,mbin in standard_kinematic_bins():
+    datadir = f"../rebuildMoments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
+    f5 = h5py.File(datadir + "/Msaved.h5")
+    M = f5['Moments'][:]
+    w,v = np.linalg.eigh(M)
+    v = np.flip(v,1)
+    Nmoments = M.shape[0]
+    try:
+      fsaved = ROOT.TFile(datadir + "/Msaved.root")
+      fsample = ROOT.TFile(datadir + "/Msample.root")
+    except:
+      continue
+    h2daccept = fsaved.Get(f"accept_{imoment}")
+    h2dgenerated = fsaved.Get(f"generated")
+    try:
+     h2daccept.Divide(h2dgenerated)
+    except:
+     print(f"bad Divide: tbin={tbin},mbin={mbin}, h2daccept={h2daccept}, h2dgenerated={h2dgenerated}")
+    h2dmodel1 = fsample.Get(f"model1_{imoment}")
+    h2dsample = fsample.Get(f"sample_{imoment}")
+    h2dcorrect = h2dsample.Clone(f"correct_{imoment}")
+    h2dcorrect.Reset()
+    for k in range(Nmoments):
+      h2dsupport = h2dsample.Clone(f"support_{k}")
+      h2dsupport.Reset()
+      for j in range(Nmoments):
+        hj = fsample.Get(f"sample_{j}")
+        h2dsupport.Add(hj, v[j][k])
+      h2dsupport.Divide(h2daccept)
+      h2dcorrect.Add(h2dsupport, v[k][imoment])
+    try:
+      haccept.Add(h2daccept)
+      hgenerated.Add(h2dgenerated)
+      hmodel1.Add(h2dmodel1)
+      hsample.Add(h2dsample)
+      hcorrect.Add(h2dcorrect)
+    except:
+      haccept = h2daccept.Clone(f"haccept_{imoment}")
+      hgenerated = h2dgenerated.Clone(f"hgenerated")
+      hmodel1 = h2dmodel1.Clone(f"hmodel1_{imoment}")
+      hsample = h2dsample.Clone(f"hmodel1_{imoment}")
+      hcorrect = h2dcorrect.Clone(f"hmodel1_{imoment}")
+  return hsample,hcorrect,hmodel1,hgenerated
