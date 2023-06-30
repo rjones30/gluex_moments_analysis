@@ -63,11 +63,14 @@ if [ "$mspec" != "" ]; then
 else
     for tspec in 0.0,0.3 0.3,0.6 0.6,1.2 1.2,2.5; do
         for mspec in 0.6,0.9 0.9,1.2 1.2,1.5 1.5,1.8 1.8,2.1 2.1,2.5; do
-            build_moments $mspec $tspec >rebuildMoments_${mspec}_${tspec}.log 2>&1 & pidlist="$pidlist $!"
-	    if [ $(echo $pidlist | wc -w) -ge $maxprocesses ]; then
-		set $pidlist
-		wait $1 || clean_exit "child proces $pid crashed"
-                pidlist="$2 $3 $4 $5 $6 $7 $8 $9"
+            logfile="rebuildMoments_${mspec}_${tspec}.log"
+	    if [ ! -f $logfile ]; then
+                build_moments $mspec $tspec >$logfile 2>&1 & pidlist="$pidlist $!"
+	        if [ $(echo $pidlist | wc -w) -ge $maxprocesses ]; then
+		    set $pidlist
+		    wait $1 || clean_exit "child proces $pid crashed"
+                    pidlist="$2 $3 $4 $5 $6 $7 $8 $9"
+                fi
             fi
         done
     done
