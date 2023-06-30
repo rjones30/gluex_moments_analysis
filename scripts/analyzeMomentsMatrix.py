@@ -239,20 +239,24 @@ def histogram_moments(name, title, moments, errors):
   return h
 
 def histograms_of_moments(Nmoments, basename, basetitle, 
-                          xtitle, nx, x0, x1, ytitle, ny, y0, y1):
+                          atitles, nbins, alimits):
    histograms = []
    for i in range(Nmoments):
       name = basename.format(i)
       title = basetitle.format(i)
-      h = ROOT.TH2D(name, title, nx, x0, x1, ny, y0, y1)
-      h.GetXaxis().SetTitle(xtitle)
-      h.GetYaxis().SetTitle(ytitle)
+      h = ROOT.TH2D(name, title, nbins[0], alimits[0][0], alimits[0][1],
+                                 nbins[1], alimits[1][0], alimits[1][1])
+      h.GetXaxis().SetTitle(atitles[0])
+      h.GetYaxis().SetTitle(atitles[1])
       histograms.append(h)
    return histograms
 
-def analyze_moments(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1, 
+def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
                     sample_subset=range(5), acceptance_subset=range(5,10),
                     Mmatrix="Msaved.h5"):
+  kinbins = (190, 25)
+  kinbounds = ((0.6,2.5), (0.0,2.5)) # mass in GeV, |t| in GeV^2
+
   try:
     f5 = h5py.File("Msample.h5")
     samplemom = f5['sample_moment'][:]
@@ -271,11 +275,11 @@ def analyze_moments(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
     mock_events = []
     gen_events = []
     h2dmodel = histograms_of_moments(169, "model1_{0}", "model 1 moment {0}", 
-                                     "massEtaPi0 (GeV)", 120, 0.9, 2.1,
-                                     "|t| (GeV^2)", 25, 0.0, 1.2)
+                                     ("massEtaPi0 (GeV)", "|t| (GeV^2)"),
+                                     kinbins, kinbounds)
     h2dsample = histograms_of_moments(169, "sample_{0}", "mock sample moment {0}", 
-                                      "massEtaPi0 (GeV)", 120, 0.9, 2.1,
-                                      "|t| (GeV^2)", 25, 0.0, 1.2)
+                                      ("massEtaPi0 (GeV)", "|t| (GeV^2)"),
+                                      kinbins, kinbounds)
     for i in sample_subset:
       tstart1 = time.perf_counter()
       bmm.open(f"../generated_moments_x10_{i}.root:etapi0_moments")
@@ -381,11 +385,11 @@ def analyze_moments(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
 
     h2daccepted = histograms_of_moments(169, "accept_{0}",
                                         "acceptance for support vector {0}", 
-                                        "massEtaPi0 (GeV)", 120, 0.9, 2.1,
-                                        "|t| (GeV^2)", 25, 0.0, 1.2)
+                                        ("massEtaPi0 (GeV)", "|t| (GeV^2)"),
+                                        kinbins, kinbounds)
     h2dgenerated = histograms_of_moments(1, "generated", "generated spectrum", 
-                                        "massEtaPi0 (GeV)", 120, 0.9, 2.1,
-                                        "|t| (GeV^2)", 25, 0.0, 1.2)
+                                         ("massEtaPi0 (GeV)", "|t| (GeV^2)"),
+                                         kinbins, kinbounds)
     gen_events = []
     for i in acceptance_subset:
       tstart3 = time.perf_counter()
@@ -464,8 +468,8 @@ def analyze_moments(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=1,
 
 def standard_kinematic_bins():
   kinbins = []
-  for tbin in ((0.0,0.3), (0.3,0.6), (0.6,1.2)):
-    for mbin in ((0.9,1.2), (1.2,1.5), (1.5,1.8), (1.8,2.1)):
+  for tbin in ((0.0,0.3), (0.3,0.6), (0.6,1.2), (1.2,2.5)):
+    for mbin in ((0.6,0.9), (0.9,1.2), (1.2,1.5), (1.5,1.8), (1.8,2.1), (2.1,2.5)):
       kinbins.append((tbin,mbin))
   return kinbins
 
@@ -503,7 +507,7 @@ def model1_corrected_moment(imoment):
       h2dcorrect.Add(h2dsupport, v[k][imoment])
       h2dnormal.Add(h2dsupport, v[k][0])
       """
-    normfact = fsample.Get(f"model1_0").Integral() / h2dnormal.Integral()
+    normfact = fsample.Get(f"model1_0").Integral() / (h2dnormal.Integral() + 1e-99)
     try:
       hgenerated.Add(h2dgenerated)
       hmodel1.Add(h2dmodel1)

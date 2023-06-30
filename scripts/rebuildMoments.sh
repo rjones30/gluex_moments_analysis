@@ -43,8 +43,10 @@ function build_moments {
     tspec=$2
     workdir="rebuildMoments_${mspec}_${tspec}"
     #rm -rf $workdir || clean_exit "unable to clear space for workdir $workdir"
-    #mkdir $workdir || clean_exit "unable to create workdir $workdir"
-    #cp src/C_buildMomentsMatrix* $workdir || clean_exit "unable to populate workdir $workdir"
+    if [ ! -d $workdir ]; then
+        mkdir -p $workdir || clean_exit "unable to create workdir $workdir"
+        cp src/C_buildMomentsMatrix* $workdir || clean_exit "unable to populate workdir $workdir"
+    fi
     cd $workdir || clean_exit "unable to descend into workdir $workdir"
     cat >rebuild.py <<EOI
 import sys
@@ -59,8 +61,8 @@ pidlist=""
 if [ "$mspec" != "" ]; then
     build_moments $mspec $tspec >rebuildMoments_${mspec}_${tspec}.log 2>&1 & pidlist="$pidlist $!"
 else
-    for tspec in 0.0,0.3 0.3,0.6 0.6,1.2; do
-        for mspec in 0.9,1.2 1.2,1.5 1.5,1.8 1.8,2.1; do
+    for tspec in 0.0,0.3 0.3,0.6 0.6,1.2 1.2,2.5; do
+        for mspec in 0.6,0.9 0.9,1.2 1.2,1.5 1.5,1.8 1.8,2.1 2.1,2.5; do
             build_moments $mspec $tspec >rebuildMoments_${mspec}_${tspec}.log 2>&1 & pidlist="$pidlist $!"
 	    if [ $(echo $pidlist | wc -w) -ge $maxprocesses ]; then
 		set $pidlist
