@@ -200,11 +200,10 @@ def histogram_acceptance(events, histograms, mPi0=0, mEta=0, mGJ=0,
    if mGJ == 0:
       mGJ = globals()['mGJ']
    columns = {}
-   columns = {'mX': "massEtaPi0", '|t|': "abst", 'Y': "YmomGJ"}
+   columns = {'mX': "massEtaPi0", '|t|': "abst", 'Y': "YmomGJ", 'Y_': "YmomGJ_"}
    if use_generated and "massEtaPi0_" in intree:
       columns['mX'] = "massEtaPi0_"
       columns['|t|'] = "abst_"
-      columns['Y'] = "YmomGJ_"
 
    decomp = ThreadPoolExecutor(32)
    arrays = intree.arrays(columns.values(), 
@@ -214,12 +213,15 @@ def histogram_acceptance(events, histograms, mPi0=0, mEta=0, mGJ=0,
    massEtaPi0 = arrays[columns['mX']]
    abst = arrays[columns['|t|']]
    YmomGJ = arrays[columns['Y']]
+   YmomGJ_ = arrays[columns['Y_']]
    for i in range(len(events)):
       iev = events[i]
       if len(svectors) > 0:
          Y = YmomGJ[iev] @ svectors
+         Y_ = YmomGJ_[iev] @ svectors
       else:
          Y = YmomGJ[iev]
+         Y_ = YmomGJ_[iev]
       nmom = 0
       if weights:
          w = weights[i]
@@ -228,7 +230,7 @@ def histogram_acceptance(events, histograms, mPi0=0, mEta=0, mGJ=0,
       for iPi0 in range(mPi0):
          for iEta in range(mEta):
             for iGJ in range(mGJ):
-               histograms[nmom].Fill(massEtaPi0[iev], abst[iev], w * Y[iGJ]**2)
+               histograms[nmom].Fill(massEtaPi0[iev], abst[iev], w * Y[iGJ] * Y_[iGJ])
                nmom += 1
    return nmom
 

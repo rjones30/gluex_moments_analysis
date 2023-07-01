@@ -507,23 +507,21 @@ def model1_corrected_moment(imoment):
         h2dsupport[svk].Reset()
       for j in range(Nmoments):
         for k in range(Nmoments):
+          svk = f"{svector}_s{k}"
           h2dsupport[svk].Add(h2dsample[j], v[j,k])
     h2dcorrect = h2dsample[imoment].Clone(f"correct_{imoment}")
     h2dcorrect.Reset()
     for k in range(Nmoments):
-      h2dcorrect.Add(h2dsample[k], Minv[imoment,k])
-      """
-      h2dsupport = h2dsample.Clone(f"support_{k}")
-      h2dsupport.Reset()
-      for j in range(Nmoments):
-        hj = fsample.Get(f"sample_{j}")
-        h2dsupport.Add(hj, v[j][k])
-      h2daccept = fsaved.Get(f"accept_{k}")
-      h2daccept.Divide(h2dgenerated)
-      h2dsupport.Divide(h2daccept)
-      h2dcorrect.Add(h2dsupport, v[k][imoment])
-      h2dnormal.Add(h2dsupport, v[k][0])
-      """
+      if False:
+         h2dcorrect.Add(h2dsample[k], Minv[imoment,k])
+      else:
+         svk = f"{svector}_s{k}"
+         h2daccept = fsaved.Get(f"accept_{k}")
+         h2daccept.Divide(h2dgenerated)
+         h2d = h2dsupport[svk].Clone()
+         h2d.Divide(h2daccept)
+         h2dcorrect.Add(h2d, v[imoment,k])
+         h2d.Delete()
     try:
       hgenerated.Add(h2dgenerated)
       hmodel1.Add(h2dmodel1)
@@ -542,25 +540,38 @@ def model1_corrected_moment(imoment):
       hcorrect.SetDirectory(0)
   return hsample,hcorrect,hmodel1,hgenerated
 
-def scan_em(corrected=1, scale=1):
+def scan_em(corrected=1, scale=1, tbin=0):
   for m in range(169):
     h = model1_corrected_moment(m)
-    h1 = h[corrected].ProjectionX()
+    px1 = h[corrected].GetName() + "_px"
+    if tbin == 0:
+      h1 = h[corrected].ProjectionX(px1)
+    else:
+      h1 = h[corrected].ProjectionX(px1, tbin, tbin)
     h1.Scale(scale)
     h1.Rebin(2)
-    h2 = h[2].ProjectionX()
+    px2 = h[2].GetName() + "_px"
+    if tbin == 0:
+      h2 = h[2].ProjectionX(px2)
+    else:
+      h2 = h[2].ProjectionX(px2, tbin, tbin)
     h2.SetLineColor(2)
     h2.Rebin(2)
-    hmax = max([h1.GetBinContent(i+1) + h1.GetBinError(i+1)
-                for i in range(h1.GetNbinsX())] +
-               [h2.GetBinContent(i+1) + h2.GetBinError(i+1)
-                for i in range(h1.GetNbinsX())])
-    hmin = min([h1.GetBinContent(i+1) - h1.GetBinError(i+1)
-                for i in range(h1.GetNbinsX())] +
-               [h2.GetBinContent(i+1) - h2.GetBinError(i+1)
-                for i in range(h1.GetNbinsX())])
-    h1.SetMaximum(hmax + abs(hmax) * 0.1)
-    h1.SetMinimum(hmin - abs(hmin) * 0.1)
+    hmax = 0
+    hmin = 0
+    for i in range(h1.GetNbinsX()):
+      y1 = h1.GetBinContent(i+1)
+      e1 = h1.GetBinError(i+1)
+      y2 = h2.GetBinContent(i+1)
+      e2 = h2.GetBinError(i+1)
+      if e1 < 1e5:
+        hmax = max(hmax, y1 + e1)
+        hmin = min(hmin, y1 - e1)
+      if e2 < 1e5:
+        hmax = max(hmax, y2 + e2)
+        hmin = min(hmin, y2 - e2)
+    h1.SetMaximum(hmax + (hmax - hmin) * 0.1)
+    h1.SetMinimum(hmin + (hmin - hmax) * 0.1)
     h1.Draw()
     h2.Draw("same")
     chisq = 0
