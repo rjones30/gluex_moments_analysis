@@ -477,14 +477,18 @@ def standard_kinematic_bins():
 def model1_corrected_moment(imoment):
   for tbin,mbin in standard_kinematic_bins():
     datadir = f"../etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
-    f5 = h5py.File(datadir + "/Msaved.h5")
-    M = f5['Moments'][:]
+    f5saved = h5py.File(datadir + "/Msaved.h5")
+    Ngen = f5saved['generated_subset'][()]
+    M = f5saved['Moments'][:]
+    M *= (4 * math.pi)**3 / Ngen
     w,v = np.linalg.eigh(M)
     v = np.flip(v,1)
     Minv = np.linalg.inv(M)
     Nmoments = M.shape[0]
     fsaved = ROOT.TFile(datadir + "/Msaved.root")
     h2dgenerated = fsaved.Get(f"generated")
+    f5sample = h5py.File(datadir + "/Msample.h5")
+    maxweight = f5sample['sample_maxweight'][()]
     fsample = ROOT.TFile(datadir + "/Msample.root")
     h2dmodel1 = fsample.Get(f"model1_{imoment}")
     h2dsample = [fsample.Get(f"sample_{k}") for k in range(Nmoments)]
@@ -505,12 +509,12 @@ def model1_corrected_moment(imoment):
         for k in range(Nmoments):
           h2dsupport[svk].Add(h2dsample[j], v[j,k])
     h2dcorrect = h2dsample[imoment].Clone(f"correct_{imoment}")
-    h2dnormal = h2dsample[0].Clone(f"correct0")
+    #h2dnormal = h2dsample[0].Clone(f"correct0")
     h2dcorrect.Reset()
-    h2dnormal.Reset()
+    #h2dnormal.Reset()
     for k in range(Nmoments):
       h2dcorrect.Add(h2dsample[k], Minv[imoment,k])
-      h2dnormal.Add(h2dsample[k], Minv[0,k])
+      #h2dnormal.Add(h2dsample[k], Minv[0,k])
       """
       h2dsupport = h2dsample.Clone(f"support_{k}")
       h2dsupport.Reset()
@@ -523,19 +527,19 @@ def model1_corrected_moment(imoment):
       h2dcorrect.Add(h2dsupport, v[k][imoment])
       h2dnormal.Add(h2dsupport, v[k][0])
       """
-    normfact = fsample.Get(f"model1_0").Integral() / (h2dnormal.Integral() + 1e-99)
+    #normfact = fsample.Get(f"model1_0").Integral() / (h2dnormal.Integral() + 1e-99)
     try:
       hgenerated.Add(h2dgenerated)
       hmodel1.Add(h2dmodel1)
-      hsample.Add(h2dsample[imoment], normfact)
-      hcorrect.Add(h2dcorrect, normfact)
+      hsample.Add(h2dsample[imoment], maxweight)
+      hcorrect.Add(h2dcorrect, maxweight)
     except:
       hgenerated = h2dgenerated.Clone(f"hgenerated")
       hmodel1 = h2dmodel1.Clone(f"hmodel1_{imoment}")
       hsample = h2dsample[imoment].Clone(f"hsample_{imoment}")
       hcorrect = h2dcorrect.Clone(f"hcorrect_{imoment}")
-      hsample.Scale(normfact)
-      hcorrect.Scale(normfact)
+      hsample.Scale(maxweight)
+      hcorrect.Scale(maxweight)
       hgenerated.SetDirectory(0)
       hmodel1.SetDirectory(0)
       hsample.SetDirectory(0)
