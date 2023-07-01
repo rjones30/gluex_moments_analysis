@@ -200,10 +200,12 @@ def histogram_acceptance(events, histograms, mPi0=0, mEta=0, mGJ=0,
    if mGJ == 0:
       mGJ = globals()['mGJ']
    columns = {}
-   columns = {'mX': "massEtaPi0", '|t|': "abst", 'Y': "YmomGJ", 'Y_': "YmomGJ_"}
+   columns = {'mX': "massEtaPi0", '|t|': "abst", 'Y': "YmomGJ"}
    if use_generated and "massEtaPi0_" in intree:
       columns['mX'] = "massEtaPi0_"
       columns['|t|'] = "abst_"
+   if "YmomGJ_" in intree:
+      columns['Y_'] = "YmomGJ_"
 
    decomp = ThreadPoolExecutor(32)
    arrays = intree.arrays(columns.values(), 
@@ -213,7 +215,10 @@ def histogram_acceptance(events, histograms, mPi0=0, mEta=0, mGJ=0,
    massEtaPi0 = arrays[columns['mX']]
    abst = arrays[columns['|t|']]
    YmomGJ = arrays[columns['Y']]
-   YmomGJ_ = arrays[columns['Y_']]
+   if "YmomGJ_" in intree:
+      YmomGJ_ = arrays[columns['Y_']]
+   else:
+      YmomGJ_ = YmomGJ
    for i in range(len(events)):
       iev = events[i]
       if len(svectors) > 0:
