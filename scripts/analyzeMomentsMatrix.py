@@ -37,6 +37,7 @@ if len(sys.argv) < 2 or sys.argv[1][0] == '-':
   usage()
 
 h5inputs = {}
+h2dsupport = {}
 
 def open(h5input):
   global f5
@@ -475,7 +476,7 @@ def standard_kinematic_bins():
 
 def model1_corrected_moment(imoment):
   for tbin,mbin in standard_kinematic_bins():
-    datadir = f"../rebuildMoments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
+    datadir = f"../etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
     f5 = h5py.File(datadir + "/Msaved.h5")
     M = f5['Moments'][:]
     w,v = np.linalg.eigh(M)
@@ -486,15 +487,30 @@ def model1_corrected_moment(imoment):
     h2dgenerated = fsaved.Get(f"generated")
     fsample = ROOT.TFile(datadir + "/Msample.root")
     h2dmodel1 = fsample.Get(f"model1_{imoment}")
-    h2dsample = fsample.Get(f"sample_{imoment}")
-    h2dcorrect = h2dsample.Clone(f"correct_{imoment}")
-    h2dnormal = h2dsample.Clone(f"normal_0")
+    h2dsample = [fsample.Get(f"sample_{k}") for k in range(Nmoments)]
+    svector = f"sample_{mbin}_{tbin}"
+    try:
+      for k in range(Nmoments):
+        svk = f"{svector}_s{k}"
+        h2dsupport[svk].SetTitle(f"sample support vector moment {k}")
+    except:
+      print("building support vectors for", svector)
+      for k in range(Nmoments):
+        svk = f"{svector}_s{k}"
+        h2dsupport[svk] = h2dsample[k].Clone(svk)
+        h2dsupport[svk].SetTitle(f"sample support vector moment {k}")
+        h2dsupport[svk].SetDirectory(0)
+        h2dsupport[svk].Reset()
+      for j in range(Nmoments):
+        for k in range(Nmoments):
+          h2dsupport[svk].Add(h2dsample[j], v[j,k])
+    h2dcorrect = h2dsample[imoment].Clone(f"correct_{imoment}")
+    h2dnormal = h2dsample[0].Clone(f"correct0")
     h2dcorrect.Reset()
     h2dnormal.Reset()
     for k in range(Nmoments):
-      hk = fsample.Get(f"sample_{k}")
-      h2dcorrect.Add(hk, Minv[imoment,k])
-      h2dnormal.Add(hk, Minv[0,k])
+      h2dcorrect.Add(h2dsample[k], Minv[imoment,k])
+      h2dnormal.Add(h2dsample[k], Minv[0,k])
       """
       h2dsupport = h2dsample.Clone(f"support_{k}")
       h2dsupport.Reset()
@@ -511,12 +527,12 @@ def model1_corrected_moment(imoment):
     try:
       hgenerated.Add(h2dgenerated)
       hmodel1.Add(h2dmodel1)
-      hsample.Add(h2dsample, normfact)
+      hsample.Add(h2dsample[imoment], normfact)
       hcorrect.Add(h2dcorrect, normfact)
     except:
       hgenerated = h2dgenerated.Clone(f"hgenerated")
       hmodel1 = h2dmodel1.Clone(f"hmodel1_{imoment}")
-      hsample = h2dsample.Clone(f"hsample_{imoment}")
+      hsample = h2dsample[imoment].Clone(f"hsample_{imoment}")
       hcorrect = h2dcorrect.Clone(f"hcorrect_{imoment}")
       hsample.Scale(normfact)
       hcorrect.Scale(normfact)
@@ -525,3 +541,28 @@ def model1_corrected_moment(imoment):
       hsample.SetDirectory(0)
       hcorrect.SetDirectory(0)
   return hsample,hcorrect,hmodel1,hgenerated
+
+def scan_em():
+  for m in range(169):
+    h = model1_corrected_moment(m)
+    h1 = h[1].ProjectionX()
+    h1.Rebin(2)
+    h1.Draw()
+    h2 = h[2].ProjectionX()
+    h2.SetLineColor(2)
+    h2.Rebin(2)
+    h2.Draw("same")
+    chisq = 0
+    ndof = 0
+    for n in range(h1.GetNbinsX()):
+       y1 = h1.GetBinContent(n+1)
+       e1 = h1.GetBinError(n+1)
+       y2 = h2.GetBinContent(n+1)
+       e2 = h2.GetBinError(n+1)
+       chisq += (y1 - y2)**2 / (e1**2 + e2**2 + 1e-99)
+       ndof += 1
+    c1 = ROOT.gROOT.FindObject("c1")
+    c1.Update()
+    print(f"chisquare = {chisq}, ndof={ndof}")
+    if input("<enter> to continue, q to quit: " ) == 'q':
+      break
