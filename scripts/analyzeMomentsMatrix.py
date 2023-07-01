@@ -509,12 +509,9 @@ def model1_corrected_moment(imoment):
         for k in range(Nmoments):
           h2dsupport[svk].Add(h2dsample[j], v[j,k])
     h2dcorrect = h2dsample[imoment].Clone(f"correct_{imoment}")
-    #h2dnormal = h2dsample[0].Clone(f"correct0")
     h2dcorrect.Reset()
-    #h2dnormal.Reset()
     for k in range(Nmoments):
       h2dcorrect.Add(h2dsample[k], Minv[imoment,k])
-      #h2dnormal.Add(h2dsample[k], Minv[0,k])
       """
       h2dsupport = h2dsample.Clone(f"support_{k}")
       h2dsupport.Reset()
@@ -527,7 +524,6 @@ def model1_corrected_moment(imoment):
       h2dcorrect.Add(h2dsupport, v[k][imoment])
       h2dnormal.Add(h2dsupport, v[k][0])
       """
-    #normfact = fsample.Get(f"model1_0").Integral() / (h2dnormal.Integral() + 1e-99)
     try:
       hgenerated.Add(h2dgenerated)
       hmodel1.Add(h2dmodel1)
@@ -546,15 +542,26 @@ def model1_corrected_moment(imoment):
       hcorrect.SetDirectory(0)
   return hsample,hcorrect,hmodel1,hgenerated
 
-def scan_em():
+def scan_em(corrected=1, scale=1):
   for m in range(169):
     h = model1_corrected_moment(m)
-    h1 = h[1].ProjectionX()
+    h1 = h[corrected].ProjectionX()
+    h1.Scale(scale)
     h1.Rebin(2)
-    h1.Draw()
     h2 = h[2].ProjectionX()
     h2.SetLineColor(2)
     h2.Rebin(2)
+    hmax = max([h1.GetBinContent(i+1) + h1.GetBinError(i+1)
+                for i in range(h1.GetNbinsX())] +
+               [h2.GetBinContent(i+1) + h2.GetBinError(i+1)
+                for i in range(h1.GetNbinsX())])
+    hmin = min([h1.GetBinContent(i+1) - h1.GetBinError(i+1)
+                for i in range(h1.GetNbinsX())] +
+               [h2.GetBinContent(i+1) - h2.GetBinError(i+1)
+                for i in range(h1.GetNbinsX())])
+    h1.SetMaximum(hmax + abs(hmax) * 0.1)
+    h1.SetMinimum(hmin - abs(hmin) * 0.1)
+    h1.Draw()
     h2.Draw("same")
     chisq = 0
     ndof = 0
