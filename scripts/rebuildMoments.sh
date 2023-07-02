@@ -61,7 +61,7 @@ pidlist=""
 if [ "$mspec" != "" ]; then
     build_moments $mspec $tspec >rebuildMoments_${mspec}_${tspec}.log 2>&1 & pidlist="$pidlist $!"
 else
-    seqno=33
+    seqno=16
     for tspec in 0.0,0.3 0.3,0.6 0.6,1.2 1.2,2.5; do
         #for mspec in 0.6,0.75 0.75,0.9 0.9,1.05 1.05,1.2 1.2,1.35 1.35,1.5 1.5,1.65 1.65,1.8 1.8,1.95 1.95,2.1 2.1,2.25 2.25,2.4; do
         for mspec in 0.6,0.9 0.9,1.2 1.2,1.5 1.5,1.8 1.8,2.1 2.1,2.5; do
