@@ -467,16 +467,25 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
   hdiff.Add(hmodel, -1)
   return hsamp,hcorr,hmodel,hdiff
 
-def standard_kinematic_bins():
+def standard_kinematic_bins(finebins=0):
+  tbins = ((0.0,0.3), (0.3,0.6), (0.6,1.2), (1.2,2.5))
+  if finebins:
+    mbins = ((0.6,0.75), (0.75,0.9), (0.9,1.05),
+             (1.05,1.2), (1.2,1.35), (1.35,1.5),
+             (1.5,1.65), (1.65,1.8), (1.8,1.95),
+             (1.95,2.1), (2.1,2.25), (2.25,2.4))
+  else:
+    mbins = ((0.6,0.9), (0.9,1.2), (1.2,1.5),
+             (1.5,1.8), (1.8,2.1), (2.1,2.5))
+
   kinbins = []
-  for tbin in ((0.0,0.3), (0.3,0.6), (0.6,1.2), (1.2,2.5)):
-    for mbin in ((0.6,0.9), (0.9,1.2), (1.2,1.5), (1.5,1.8), (1.8,2.1), (2.1,2.5)):
-      #for mbin in ((0.6,0.75), (0.75,0.9), (0.9,1.05), (1.05,1.2), (1.2,1.35), (1.35,1.5), (1.5,1.65), (1.65,1.8), (1.8,1.95), (1.95,2.1), (2.1,2.25), (2.25,2.4)):
+  for tbin in tbins:
+    for mbin in mbins:
       kinbins.append((tbin,mbin))
   return kinbins
 
-def model1_corrected_moment(imoment):
-  for tbin,mbin in standard_kinematic_bins():
+def model1_corrected_moment(imoment, finebins=0):
+  for tbin,mbin in standard_kinematic_bins(finebins):
     datadir = f"../etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
     f5saved = h5py.File(datadir + "/Msaved.h5")
     Ngen = f5saved['generated_subset'][()]
@@ -541,9 +550,14 @@ def model1_corrected_moment(imoment):
       hcorrect.SetDirectory(0)
   return hsample,hcorrect,hmodel1,hgenerated
 
-def scan_em(corrected=1, scale=1, tbin=0):
+def scan_em(corrected=1, scale=1, tbin=0, finebins=0, hchisq=0):
+  if hchisq == 0:
+    title = "#chi^{2} distribution for corrected-model moments, 95 dof"
+    hchisq = ROOT.TH1D("hchisq", title, 100, 0, 200)
+    hchisq.GetXaxis().SetTitle("#chi^{2}")
+    hchisq.GetYaxis().SetTitle("moments")
   for m in range(169):
-    h = model1_corrected_moment(m)
+    h = model1_corrected_moment(m, finebins=finebins)
     px1 = h[corrected].GetName() + "_px"
     if tbin == 0:
       h1 = h[corrected].ProjectionX(px1)
@@ -573,8 +587,6 @@ def scan_em(corrected=1, scale=1, tbin=0):
         hmin = min(hmin, y2 - e2)
     h1.SetMaximum(hmax + (hmax - hmin) * 0.1)
     h1.SetMinimum(hmin + (hmin - hmax) * 0.1)
-    h1.Draw()
-    h2.Draw("same")
     chisq = 0
     ndof = 0
     for n in range(h1.GetNbinsX()):
@@ -584,8 +596,19 @@ def scan_em(corrected=1, scale=1, tbin=0):
        e2 = h2.GetBinError(n+1)
        chisq += (y1 - y2)**2 / (e1**2 + e2**2 + 1e-99)
        ndof += 1
+    hchisq.Fill(chisq)
+    if len(h1.GetYaxis().GetTitle()) > 0:
+      title = h1.GetYaxis().GetTitle()
+    else:
+      title = h1.GetTitle()
+      h1.GetYaxis().SetTitle(title)
+    h1.SetTitle(f"{title}, tbin={tbin}, #chi^{{2}} = {chisq:.1f} / {ndof}")
+    h1.SetStats(0)
+    h1.Draw()
+    h2.Draw("same")
     c1 = ROOT.gROOT.FindObject("c1")
     c1.Update()
     print(f"chisquare = {chisq}, ndof={ndof}")
-    if input("<enter> to continue, q to quit: " ) == 'q':
-      break
+    #if input("<enter> to continue, q to quit: " ) == 'q':
+    #  break
+  return hchisq
