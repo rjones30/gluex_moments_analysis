@@ -138,17 +138,17 @@ def compute_moments(events, mPi0=0, mEta=0, mGJ=0, weights=[], use_generated=0):
                           library="np")
 
    YmomGJ = arrays[columns['Y']]
-   moments = np.zeros([mPi0 * mEta * mGJ], dtype=float)
-   momentsvar = np.zeros([mPi0 * mEta * mGJ], dtype=float)
+   Nmoments = nPi8 * mEta * mGJ
+   moments = np.zeros([Nmoments], dtype=float)
+   momentscov = np.zeros([Nmoments, Nmoments], dtype=float)
    for i in range(len(events)):
       iev = events[i]
+      Y = np.copy(YmomeGJ[iev])
       if weights:
-         moments += YmomGJ[iev] * weights[i]
-         momentsvar += np.square(YmomGJ[iev] * weights[i])
-      else:
-         moments += YmomGJ[iev]
-         momentsvar += np.square(YmomGJ[iev])
-   return moments,momentsvar
+         Y *= weights[i]
+      moments += Y
+      momentscov += np.outer(Y, Y)
+   return moments,momentscov
 
 def histogram_moments(events, histograms, mPi0=0, mEta=0, mGJ=0,
                       weights=[], svectors=[], use_generated=0):

@@ -290,13 +290,13 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
       maxweight = max(weights) * 1.1
       tstep1a = time.perf_counter()
       print(f"  select generated events: {tstep1a-tstart1:.3f}s")
-      mom,var = bmm.compute_moments(events, mPi0=1, mEta=1, weights=weights)
+      mom,cov = bmm.compute_moments(events, mPi0=1, mEta=1, weights=weights)
       try:
         refermom += mom
-        refervar += var
+        refercov += cov
       except:
         refermom = mom
-        refervar = var
+        refercov = cov
       tstep1b = time.perf_counter()
       print(f"  compute generated moments: {tstep1b-tstep1a:.3f}s")
       bmm.histogram_moments(events, h2dmodel, mPi0=1, mEta=1, weights=weights)
@@ -309,13 +309,13 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
       mock_events += events
       tstep1d = time.perf_counter()
       print(f"  select mock data sample: {tstep1d-tstep1c:.3f}s")
-      mom,var = bmm.compute_moments(events, mPi0=1, mEta=1)
+      mom,cov = bmm.compute_moments(events, mPi0=1, mEta=1)
       try:
         samplemom += mom
-        samplevar += var
+        samplecov += cov
       except:
         samplemom = mom
-        samplevar = var
+        samplecov = cov
       tstep1e = time.perf_counter()
       print(f"  compute mock data moments: {tstep1e-tstep1d:.3f}s")
       bmm.histogram_moments(events, h2dsample, mPi0=1, mEta=1)
@@ -325,8 +325,8 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
     f5 = h5py.File("Msample.h5", "w")
     f5.create_dataset("sample_moment", data=samplemom)
     f5.create_dataset("reference_moment", data=refermom)
-    f5.create_dataset("sample_variance", data=samplevar)
-    f5.create_dataset("reference_variance", data=refervar)
+    f5.create_dataset("sample_covariance", data=samplecov)
+    f5.create_dataset("reference_covariance", data=refercov)
     f5.create_dataset("sample_events", data=mock_events)
     f5.create_dataset("generated_events", data=gen_events)
     f5.create_dataset("sample_maxweight", data=maxweight)
@@ -456,13 +456,13 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
   hdiff.GetYaxis().SetTitle("moment (corrected_sample - model")
   for i in range(Nmom):
     hsamp.SetBinContent(i+1, samplemom[i])
-    hsamp.SetBinError(i+1, samplevar[i]**0.5)
+    hsamp.SetBinError(i+1, samplevar[i,i]**0.5)
     hcorr.SetBinContent(i+1, correctmom[i])
-    hcorr.SetBinError(i+1, correctvar[i]**0.5)
+    hcorr.SetBinError(i+1, correctvar[i,i]**0.5)
     hmodel.SetBinContent(i+1, refermom[i])
-    hmodel.SetBinError(i+1, refervar[i]**0.5)
+    hmodel.SetBinError(i+1, refervar[i,i]**0.5)
     hdiff.SetBinContent(i+1, correctmom[i])
-    hdiff.SetBinError(i+1, correctvar[i]**0.5)
+    hdiff.SetBinError(i+1, correctvar[i,i]**0.5)
   hmodel.Scale(hcorr.GetBinContent(1) / hmodel.GetBinContent(1))
   hdiff.Add(hmodel, -1)
   return hsamp,hcorr,hmodel,hdiff
