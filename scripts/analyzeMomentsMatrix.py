@@ -262,8 +262,8 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
     f5 = h5py.File("Msample.h5")
     samplemom = f5['sample_moment'][:]
     refermom = f5['reference_moment'][:]
-    samplevar = f5['sample_variance'][:]
-    refervar = f5['reference_variance'][:]
+    samplecov = f5['sample_covvariance'][:]
+    refercov = f5['reference_covariance'][:]
     mock_events = f5['sample_events'][:]
     gen_events = f5['generated_events'][:]
     maxweight = f5['sample_maxweight'][()]
@@ -430,16 +430,16 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
 
   Minv = np.linalg.inv(M)
   correctmom = Minv @ samplemom
-  correctvar = np.diag(Minv @ np.diag(samplevar) @ np.transpose(Minv))
+  correctcov = np.diag(Minv @ samplecov @ np.transpose(Minv))
 
   # transform from spherical basis to support vector moments
   if False:
     samplemom = np.transpose(v) @ samplemom
-    samplevar = np.diag(np.transpose(v) @ np.diag(samplevar) @ v)
+    samplecov = np.transpose(v) @ samplecov @ v
     correctmom = np.transpose(v) @ correct
-    correctvar = np.diag(np.transpose(v) @ np.diag(correct) @ v)
+    correctcov = np.transpose(v) @ correctcov @ v
     refermom = np.transpose(v) @ refermom
-    refervar = np.diag(np.transpose(v) @ np.diag(refervar) @ v)
+    refercov = np.transpose(v) @ refercov @ v
 
   Nmom = len(samplemom)
   hsamp = ROOT.TH1D("hsamp", "sample moments, uncorrected", Nmom, 0, Nmom)
@@ -456,13 +456,13 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
   hdiff.GetYaxis().SetTitle("moment (corrected_sample - model")
   for i in range(Nmom):
     hsamp.SetBinContent(i+1, samplemom[i])
-    hsamp.SetBinError(i+1, samplevar[i,i]**0.5)
+    hsamp.SetBinError(i+1, samplecov[i,i]**0.5)
     hcorr.SetBinContent(i+1, correctmom[i])
-    hcorr.SetBinError(i+1, correctvar[i,i]**0.5)
+    hcorr.SetBinError(i+1, correctcov[i,i]**0.5)
     hmodel.SetBinContent(i+1, refermom[i])
-    hmodel.SetBinError(i+1, refervar[i,i]**0.5)
+    hmodel.SetBinError(i+1, refercov[i,i]**0.5)
     hdiff.SetBinContent(i+1, correctmom[i])
-    hdiff.SetBinError(i+1, correctvar[i,i]**0.5)
+    hdiff.SetBinError(i+1, correctcov[i,i]**0.5)
   hmodel.Scale(hcorr.GetBinContent(1) / hmodel.GetBinContent(1))
   hdiff.Add(hmodel, -1)
   return hsamp,hcorr,hmodel,hdiff
