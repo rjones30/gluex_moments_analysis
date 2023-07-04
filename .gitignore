@@ -17,6 +17,7 @@ test/
 .viminfo
 *.old/
 *.png
+*_moments_[0-9]*
 archive/*
 src/generated_moments
 
