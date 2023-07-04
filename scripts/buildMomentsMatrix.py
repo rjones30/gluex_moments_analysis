@@ -143,7 +143,7 @@ def compute_moments(events, mPi0=0, mEta=0, mGJ=0, weights=[], use_generated=0):
    momentscov = np.zeros([Nmoments, Nmoments], dtype=float)
    for i in range(len(events)):
       iev = events[i]
-      Y = np.copy(YmomeGJ[iev])
+      Y = np.copy(YmomGJ[iev])
       if weights:
          Y *= weights[i]
       moments += Y
