@@ -430,7 +430,7 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
 
   Minv = np.linalg.inv(M)
   correctmom = Minv @ samplemom
-  correctcov = np.diag(Minv @ samplecov @ np.transpose(Minv))
+  correctcov = Minv @ samplecov @ np.transpose(Minv)
 
   # transform from spherical basis to support vector moments
   if False:
