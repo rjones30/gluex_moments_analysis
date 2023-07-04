@@ -32,6 +32,7 @@ def usage():
   print("                              model=1, Mmatrix=\"Msaved.h5\")")
   print(" >>> kinbins = ana.standard_kinematic_bins()")
   print(" >>> h = ana.model1_corrected_moment(imoment)")
+  print(" >>> h = ana.histogram_moments_correlations()")
 
 if len(sys.argv) < 2 or sys.argv[1][0] == '-':
   usage()
@@ -436,7 +437,7 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
   if False:
     samplemom = np.transpose(v) @ samplemom
     samplecov = np.transpose(v) @ samplecov @ v
-    correctmom = np.transpose(v) @ correct
+    correctmom = np.transpose(v) @ correctmom
     correctcov = np.transpose(v) @ correctcov @ v
     refermom = np.transpose(v) @ refermom
     refercov = np.transpose(v) @ refercov @ v
@@ -463,7 +464,7 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
     hmodel.SetBinError(i+1, refercov[i,i]**0.5)
     hdiff.SetBinContent(i+1, correctmom[i])
     hdiff.SetBinError(i+1, correctcov[i,i]**0.5)
-  hmodel.Scale(hcorr.GetBinContent(1) / hmodel.GetBinContent(1))
+  hmodel.Scale(1 / maxweight)
   hdiff.Add(hmodel, -1)
   return hsamp,hcorr,hmodel,hdiff
 
@@ -484,7 +485,7 @@ def standard_kinematic_bins(finebins=0):
       kinbins.append((tbin,mbin))
   return kinbins
 
-def model1_corrected_moment(imoment, finebins=0):
+def model1_corrected_moment(imoment, finebins=0, constraints=[]):
   for tbin,mbin in standard_kinematic_bins(finebins):
     datadir = f"../etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
     f5saved = h5py.File(datadir + "/Msaved.h5")
@@ -612,3 +613,29 @@ def scan_em(corrected=1, scale=1, tbin=0, finebins=0, hchisq=0):
     #if input("<enter> to continue, q to quit: " ) == 'q':
     #  break
   return hchisq
+
+def histogram_moments_correlations(support_moments=0):
+  hcorr = {}
+  for tbin,mbin in standard_kinematic_bins():
+    datadir = f"../etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
+    f5sample = h5py.File(datadir + "/Msample.h5")
+    cov = f5sample["sample_covariance"][:]
+    Nmoments = cov.shape[0]
+    name = f"hcorr_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
+    if support_moments:
+      title = f"net support moment correlation, m_{{X}}={mbin}, |t|={tbin}"
+    else:
+      title = f"net spherical moment correlation, m_{{X}}={mbin}, |t|={tbin}"
+    hcorr[name] = ROOT.TH1D(name, title, Nmoments, 0, Nmoments)
+    hcorr[name].GetXaxis().SetTitle("moments index")
+    hcorr[name].GetYaxis().SetTitle("correlation parameter")
+    hcorr[name].SetStats(0)
+    if support_moments:
+      f5saved = h5py.File(datadir + "/Msaved.h5")
+      M = f5saved['Moments'][:]
+      w,v = np.linalg.eigh(M)
+      cov = np.transpose(v) @ cov @ v
+    covinv = np.linalg.inv(cov)
+    for i in range(Nmoments):
+      hcorr[name].SetBinContent(i+1, covinv[i,i] * cov[i,i])
+  return hcorr
