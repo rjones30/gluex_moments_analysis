@@ -71,6 +71,7 @@ else
                 continue
             fi
             logfile="rebuildMoments_${mspec}_${tspec}.log"
+	    rm -f $logfile
 	    if [ ! -f $logfile ]; then
                 build_moments $mspec $tspec >$logfile 2>&1 & pidlist="$pidlist $!"
 	        if [ $(echo $pidlist | wc -w) -ge $maxprocesses ]; then
