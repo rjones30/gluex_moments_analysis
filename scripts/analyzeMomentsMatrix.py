@@ -289,7 +289,7 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
       events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
                                          abst_limits=abst_limits, model=1)
       gen_events += events
-      maxweight = max(weights) * 1.1
+      maxweight = max(weights) * 1.2
       tstep1a = time.perf_counter()
       print(f"  select generated events: {tstep1a-tstart1:.3f}s")
       mom,cov = bmm.compute_moments(events, mPi0=1, mEta=1, weights=weights)
