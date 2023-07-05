@@ -574,7 +574,7 @@ def apply_constraints(S, moments, covariance, histograms=[]):
     for hist in histograms:
       name = hist.GetName() + "_cons"
       title = "constrained " + hist.GetTitle()
-      histograms_cons.append(hist.Clone(name)))
+      histograms_cons.append(hist.Clone(name))
       histograms_cons[-1].SetTitle(title)
     for k in range(Nmoments):
       for j in range(Nmoments):
