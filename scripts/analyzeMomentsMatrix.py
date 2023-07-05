@@ -31,7 +31,7 @@ def usage():
   print("                             sample_subset=range(10), acceptance_subset=range(10),")
   print("                             model=1, Mmatrix=\"Msaved.h5\")")
   print(" >>> kinbins = ana.standard_kinematic_bins()")
-  print(" >>> h = ana.model1_corrected_moment(imoment)")
+  print(" >>> h = ana.model1_corrected_moments()")
   print(" >>> cmom,ccov,chists = ana.apply_constraints(S, moments, covariance, hists)")
   print(" >>> h = ana.histogram_moments_correlations()")
 
@@ -486,8 +486,13 @@ def standard_kinematic_bins(finebins=0):
       kinbins.append((tbin,mbin))
   return kinbins
 
-def model1_corrected_moment(imoment, finebins=0):
-  for tbin,mbin in standard_kinematic_bins(finebins):
+def model1_corrected_moments(imoments=range(169), kinbins=[], finebins=0):
+  hsample = [0 for i in imoments]
+  hcorrect = [0 for i in imoments]
+  hmodel1 = [0 for i in imoments]
+  if len(kinbins) == 0:
+    kinbins = standard_kinematic_bins(finebins)
+  for tbin,mbin in kinbins:
     datadir = f"../etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
     f5saved = h5py.File(datadir + "/Msaved.h5")
     Ngen = f5saved['generated_subset'][()]
@@ -502,7 +507,6 @@ def model1_corrected_moment(imoment, finebins=0):
     f5sample = h5py.File(datadir + "/Msample.h5")
     maxweight = f5sample['sample_maxweight'][()]
     fsample = ROOT.TFile(datadir + "/Msample.root")
-    h2dmodel1 = fsample.Get(f"model1_{imoment}")
     h2dsample = [fsample.Get(f"sample_{k}") for k in range(Nmoments)]
     svector = f"sample_{mbin}_{tbin}"
     try:
@@ -521,35 +525,39 @@ def model1_corrected_moment(imoment, finebins=0):
         for k in range(Nmoments):
           svk = f"{svector}_s{k}"
           h2dsupport[svk].Add(h2dsample[j], v[j,k])
-    h2dcorrect = h2dsample[imoment].Clone(f"correct_{imoment}")
-    h2dcorrect.Reset()
-    for k in range(Nmoments):
-      if False:
-         h2dcorrect.Add(h2dsample[k], Minv[imoment,k])
-      else:
-         svk = f"{svector}_s{k}"
-         h2daccept = fsaved.Get(f"accept_{k}")
-         h2daccept.Divide(h2dgenerated)
-         h2d = h2dsupport[svk].Clone()
-         h2d.Divide(h2daccept)
-         h2dcorrect.Add(h2d, v[imoment,k])
-         h2d.Delete()
+    for imoment in imoments:
+      h2dmodel1 = fsample.Get(f"model1_{imoment}")
+      h2dcorrect = h2dsample[imoment].Clone(f"correct_{imoment}")
+      h2dcorrect.Reset()
+      for k in range(Nmoments):
+        if False:
+          h2dcorrect.Add(h2dsample[k], Minv[imoment,k])
+        else:
+          svk = f"{svector}_s{k}"
+          h2daccept = fsaved.Get(f"accept_{k}")
+          h2daccept.Divide(h2dgenerated)
+          h2d = h2dsupport[svk].Clone()
+          h2d.Divide(h2daccept)
+          h2dcorrect.Add(h2d, v[imoment,k])
+          h2d.Delete()
+      try:
+        hmodel1[imoment].Add(h2dmodel1)
+        hsample[imoment].Add(h2dsample[imoment], maxweight)
+        hcorrect[imoment].Add(h2dcorrect, maxweight)
+      except:
+        hmodel1[imoment] = h2dmodel1.Clone(f"hmodel1_{imoment}")
+        hsample[imoment] = h2dsample[imoment].Clone(f"hsample_{imoment}")
+        hcorrect[imoment] = h2dcorrect.Clone(f"hcorrect_{imoment}")
+        hsample[imoment].Scale(maxweight)
+        hcorrect[imoment].Scale(maxweight)
+        hmodel1[imoment].SetDirectory(0)
+        hsample[imoment].SetDirectory(0)
+        hcorrect[imoment].SetDirectory(0)
     try:
       hgenerated.Add(h2dgenerated)
-      hmodel1.Add(h2dmodel1)
-      hsample.Add(h2dsample[imoment], maxweight)
-      hcorrect.Add(h2dcorrect, maxweight)
     except:
       hgenerated = h2dgenerated.Clone(f"hgenerated")
-      hmodel1 = h2dmodel1.Clone(f"hmodel1_{imoment}")
-      hsample = h2dsample[imoment].Clone(f"hsample_{imoment}")
-      hcorrect = h2dcorrect.Clone(f"hcorrect_{imoment}")
-      hsample.Scale(maxweight)
-      hcorrect.Scale(maxweight)
       hgenerated.SetDirectory(0)
-      hmodel1.SetDirectory(0)
-      hsample.SetDirectory(0)
-      hcorrect.SetDirectory(0)
   return hsample,hcorrect,hmodel1,hgenerated
 
 def apply_constraints(S, moments, covariance, histograms=[]):
@@ -560,15 +568,15 @@ def apply_constraints(S, moments, covariance, histograms=[]):
   number of constraint equations. If argument histograms is supplied
   it must have the same dimensions as moments.
   """
-  Ci = np.linalg.inv(covariance)
+  C = covariance
   St = np.transpose(S)
-  D = Ci @ St @ np.linalg.inv(S @ Ci @ St) @ S
-  if D.shape[0] != covariance.shape:
+  D = C @ St @ np.linalg.inv(S @ C @ St) @ S
+  if D.shape != covariance.shape:
     print("error in apply_constraints - shape of S does not match moments")
     return S, moments, covariance
   Dt = np.transpose(D)
   h = moments - D @ moments
-  C = covariance - D @ C - C @ Dt + D @ C @ Dt
+  CC = C - D @ C - C @ Dt + D @ C @ Dt
   histograms_cons = []
   if len(histograms) > 0:
     for hist in histograms:
@@ -579,28 +587,51 @@ def apply_constraints(S, moments, covariance, histograms=[]):
     for k in range(Nmoments):
       for j in range(Nmoments):
         histograms_cons[k].Add(histograms[k], -D[k,j])
-  return h, C, histograms_cons
+  return h, CC, histograms_cons
 
-def scan_em(corrected=1, scale=1, tbin=0, finebins=0, hchisq=0):
+def scan_em(corrected=1, scale=1, tbin=0, finebins=0, hchisq=0, constraints=[]):
   if hchisq == 0:
     title = "#chi^{2} distribution for corrected-model moments, 95 dof"
     hchisq = ROOT.TH1D("hchisq", title, 100, 0, 200)
     hchisq.GetXaxis().SetTitle("#chi^{2}")
     hchisq.GetYaxis().SetTitle("moments")
+  hsample = [0] * 169
+  hcorrect = [0] * 169
+  hmodel1 = [0] * 169
+  for tbin,mbin in standard_kinematic_bins(finebins):
+    hs,hc,hm,hg = model1_corrected_moments(range(169), kinbins=[(tbin,mbin)])
+    if len(constraints) > 0:
+      datadir = f"../etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
+      f5sample = h5py.File(datadir + "/Msample.h5")
+      samplemom = f5sample['sample_moment'][:]
+      samplecov = f5sample['sample_covariance'][:]
+      cmom,ccov,hc = apply_constraints(S, samplemom, samplecov, hc)
+    for m in range(169):
+      try:
+        hsample[m].Add(hs[m])
+        hcorrect[m].Add(hc[m])
+        hmodel1[m].Add(hm[m])
+      except:
+        hsample[m] = hs[m].Clone()
+        hcorrect[m] = hc[m].Clone()
+        hmodel1[m] = hm[m].Clone()
   for m in range(169):
-    h = model1_corrected_moment(m, finebins=finebins)
-    px1 = h[corrected].GetName() + "_px"
-    if tbin == 0:
-      h1 = h[corrected].ProjectionX(px1)
+    if corrected:
+      h = hcorrect[m]
     else:
-      h1 = h[corrected].ProjectionX(px1, tbin, tbin)
+      h = hsample[m]
+    px1 = h.GetName() + "_px"
+    if tbin == 0:
+      h1 = h.ProjectionX(px1)
+    else:
+      h1 = h.ProjectionX(px1, tbin, tbin)
     h1.Scale(scale)
     h1.Rebin(2)
-    px2 = h[2].GetName() + "_px"
+    px2 = hmodel1[m].GetName() + "_px"
     if tbin == 0:
-      h2 = h[2].ProjectionX(px2)
+      h2 = hmodel1[m].ProjectionX(px2)
     else:
-      h2 = h[2].ProjectionX(px2, tbin, tbin)
+      h2 = hmodel1[m].ProjectionX(px2, tbin, tbin)
     h2.SetLineColor(2)
     h2.Rebin(2)
     hmax = 0
