@@ -19,19 +19,20 @@ import buildMomentsMatrix as bmm
 
 def usage():
   print("usage: >>> import analyzeMomentsMatrix.py as ana")
-  print("  >>> ana.open(\"filename.h5\")")
-  print("  >>> w,v = ana.do_svd()")
-  print("  >>> h = ana.histogram_M_diagonal()")
-  print("  >>> h = ana.histogram_M_diagonal_GJ0()")
-  print("  >>> h = ana.histogram_M_diagonal_GJ0_Eta0()")
-  print("  >>> h = ana.histogram_M_offdiagonal()")
-  print("  >>> h = ana.histogram_eigenvalues(name, title, w)")
-  print("  >>> h = ana.histogram_moments(name, title, moments, errors)")
-  print("  >>> h = ana.analyze_moments(massEtaPi0_limits=(0,99), abst_limits=(0,99),")
-  print("                              sample_subset=range(10), acceptance_subset=range(10),")
-  print("                              model=1, Mmatrix=\"Msaved.h5\")")
+  print(" >>> ana.open(\"filename.h5\")")
+  print(" >>> w,v = ana.do_svd()")
+  print(" >>> h = ana.histogram_M_diagonal()")
+  print(" >>> h = ana.histogram_M_diagonal_GJ0()")
+  print(" >>> h = ana.histogram_M_diagonal_GJ0_Eta0()")
+  print(" >>> h = ana.histogram_M_offdiagonal()")
+  print(" >>> h = ana.histogram_eigenvalues(name, title, w)")
+  print(" >>> h = ana.histogram_moments(name, title, moments, errors)")
+  print(" >>> h = ana.analyze_moments(massEtaPi0_limits=(0,99), abst_limits=(0,99),")
+  print("                             sample_subset=range(10), acceptance_subset=range(10),")
+  print("                             model=1, Mmatrix=\"Msaved.h5\")")
   print(" >>> kinbins = ana.standard_kinematic_bins()")
   print(" >>> h = ana.model1_corrected_moment(imoment)")
+  print(" >>> cmom,ccov,chists = ana.apply_constraints(S, moments, covariance, hists)")
   print(" >>> h = ana.histogram_moments_correlations()")
 
 if len(sys.argv) < 2 or sys.argv[1][0] == '-':
@@ -485,7 +486,7 @@ def standard_kinematic_bins(finebins=0):
       kinbins.append((tbin,mbin))
   return kinbins
 
-def model1_corrected_moment(imoment, finebins=0, constraints=[]):
+def model1_corrected_moment(imoment, finebins=0):
   for tbin,mbin in standard_kinematic_bins(finebins):
     datadir = f"../etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
     f5saved = h5py.File(datadir + "/Msaved.h5")
@@ -550,6 +551,35 @@ def model1_corrected_moment(imoment, finebins=0, constraints=[]):
       hsample.SetDirectory(0)
       hcorrect.SetDirectory(0)
   return hsample,hcorrect,hmodel1,hgenerated
+
+def apply_constraints(S, moments, covariance, histograms=[]):
+  """
+  Matrix constraint S is in the form of a linear condition among the
+  moments vector h, expressed as S h = 0. The number of columns must
+  be equal to the number of moments, while the number of rows is the
+  number of constraint equations. If argument histograms is supplied
+  it must have the same dimensions as moments.
+  """
+  Ci = np.linalg.inv(covariance)
+  St = np.transpose(S)
+  D = Ci @ St @ np.linalg.inv(S @ Ci @ St) @ S
+  if D.shape[0] != covariance.shape:
+    print("error in apply_constraints - shape of S does not match moments")
+    return S, moments, covariance
+  Dt = np.transpose(D)
+  h = moments - D @ moments
+  C = covariance - D @ C - C @ Dt + D @ C @ Dt
+  histograms_cons = []
+  if len(histograms) > 0:
+    for hist in histograms:
+      name = hist.GetName() + "_cons"
+      title = "constrained " + hist.GetTitle()
+      histograms_cons.append(hist.Clone(name)))
+      histograms_cons[-1].SetTitle(title)
+    for k in range(Nmoments):
+      for j in range(Nmoments):
+        histograms_cons[k].Add(histograms[k], -D[k,j])
+  return h, C, histograms_cons
 
 def scan_em(corrected=1, scale=1, tbin=0, finebins=0, hchisq=0):
   if hchisq == 0:
