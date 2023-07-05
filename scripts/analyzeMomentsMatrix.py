@@ -521,10 +521,13 @@ def model1_corrected_moments(imoments=range(169), kinbins=[], finebins=0):
         h2dsupport[svk].SetTitle(f"sample support vector moment {k}")
         h2dsupport[svk].SetDirectory(0)
         h2dsupport[svk].Reset()
-      for j in range(Nmoments):
-        for k in range(Nmoments):
-          svk = f"{svector}_s{k}"
+      for k in range(Nmoments):
+        svk = f"{svector}_s{k}"
+        for j in range(Nmoments):
           h2dsupport[svk].Add(h2dsample[j], v[j,k])
+        h2daccept = fsaved.Get(f"accept_{k}")
+        h2daccept.Divide(h2dgenerated)
+        h2dsupport[svk].Divide(h2daccept)
     for imoment in imoments:
       h2dmodel1 = fsample.Get(f"model1_{imoment}")
       h2dcorrect = h2dsample[imoment].Clone(f"correct_{imoment}")
@@ -534,12 +537,7 @@ def model1_corrected_moments(imoments=range(169), kinbins=[], finebins=0):
           h2dcorrect.Add(h2dsample[k], Minv[imoment,k])
         else:
           svk = f"{svector}_s{k}"
-          h2daccept = fsaved.Get(f"accept_{k}")
-          h2daccept.Divide(h2dgenerated)
-          h2d = h2dsupport[svk].Clone()
-          h2d.Divide(h2daccept)
-          h2dcorrect.Add(h2d, v[imoment,k])
-          h2d.Delete()
+          h2dcorrect.Add(h2dsupport[svk], v[imoment,k])
       try:
         hmodel1[imoment].Add(h2dmodel1)
         hsample[imoment].Add(h2dsample[imoment], maxweight)
@@ -578,6 +576,7 @@ def apply_constraints(S, moments, covariance, histograms=[]):
   h = moments - D @ moments
   CC = C - D @ C - C @ Dt + D @ C @ Dt
   histograms_cons = []
+  Nmoments = len(moments)
   if len(histograms) > 0:
     for hist in histograms:
       name = hist.GetName() + "_cons"
@@ -589,7 +588,7 @@ def apply_constraints(S, moments, covariance, histograms=[]):
         histograms_cons[k].Add(histograms[k], -D[k,j])
   return h, CC, histograms_cons
 
-def scan_em(corrected=1, scale=1, tbin=0, finebins=0, hchisq=0, constraints=[]):
+def scan_em(corrected=1, scale=1, tcut=0, finebins=0, hchisq=0, constraints=[]):
   if hchisq == 0:
     title = "#chi^{2} distribution for corrected-model moments, 95 dof"
     hchisq = ROOT.TH1D("hchisq", title, 100, 0, 200)
@@ -602,10 +601,35 @@ def scan_em(corrected=1, scale=1, tbin=0, finebins=0, hchisq=0, constraints=[]):
     hs,hc,hm,hg = model1_corrected_moments(range(169), kinbins=[(tbin,mbin)])
     if len(constraints) > 0:
       datadir = f"../etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
+      f5saved = h5py.File(datadir + "/Msaved.h5")
+      M = f5saved["Moments"][:]
+      Ngen = f5saved['generated_subset'][()]
+      M *= (4 * math.pi)**3 / Ngen
+      Minv = np.linalg.inv(M)
       f5sample = h5py.File(datadir + "/Msample.h5")
       samplemom = f5sample['sample_moment'][:]
       samplecov = f5sample['sample_covariance'][:]
-      cmom,ccov,hc = apply_constraints(S, samplemom, samplecov, hc)
+      maxweight = f5sample['sample_maxweight'][()] 
+      refermom = f5sample['reference_moment'][:]
+      refercov = f5sample['reference_covariance'][:]
+      correctmom = Minv @ samplemom
+      correctcov = Minv @ samplecov @ np.transpose(Minv)
+      #cmom,ccov,chc = apply_constraints(constraints, correctmom, correctcov, hc)
+      h1 = ROOT.TH1D("h1", "constrained moments", 169, 0, 169)
+      h2 = ROOT.TH1D("h2", "model moments", 169, 0, 169)
+      chi2 = 0
+      for i in range(169):
+        h1.SetBinContent(i+1, correctmom[i])
+        h1.SetBinError(i+1, correctcov[i,i]**0.5)
+        h2.SetBinContent(i+1, refermom[i] / maxweight)
+        h2.SetBinError(i+1, refercov[i,i]**0.5 / maxweight)
+        chi2 += ((correctmom[i] - refermom[i] / maxweight)**2 /
+                 (correctcov[i,i] + refercov[i,i] / maxweight**2))
+      h2.SetLineColor(2)
+      h1.Draw()
+      h2.Draw("same")
+      ROOT.gROOT.FindObject("c1").Update()
+      input(f"chi2 for bin {mbin},{tbin} is {chi2}, ok? ")
     for m in range(169):
       try:
         hsample[m].Add(hs[m])
@@ -621,17 +645,17 @@ def scan_em(corrected=1, scale=1, tbin=0, finebins=0, hchisq=0, constraints=[]):
     else:
       h = hsample[m]
     px1 = h.GetName() + "_px"
-    if tbin == 0:
+    if tcut == 0:
       h1 = h.ProjectionX(px1)
     else:
-      h1 = h.ProjectionX(px1, tbin, tbin)
+      h1 = h.ProjectionX(px1, tcut, tcut)
     h1.Scale(scale)
     h1.Rebin(2)
     px2 = hmodel1[m].GetName() + "_px"
-    if tbin == 0:
+    if tcut == 0:
       h2 = hmodel1[m].ProjectionX(px2)
     else:
-      h2 = hmodel1[m].ProjectionX(px2, tbin, tbin)
+      h2 = hmodel1[m].ProjectionX(px2, tcut, tcut)
     h2.SetLineColor(2)
     h2.Rebin(2)
     hmax = 0
@@ -664,15 +688,15 @@ def scan_em(corrected=1, scale=1, tbin=0, finebins=0, hchisq=0, constraints=[]):
     else:
       title = h1.GetTitle()
       h1.GetYaxis().SetTitle(title)
-    h1.SetTitle(f"{title}, tbin={tbin}, #chi^{{2}} = {chisq:.1f} / {ndof}")
+    h1.SetTitle(f"{title}, tcut={tcut}, #chi^{{2}} = {chisq:.1f} / {ndof}")
     h1.SetStats(0)
     h1.Draw()
     h2.Draw("same")
     c1 = ROOT.gROOT.FindObject("c1")
     c1.Update()
-    print(f"chisquare = {chisq}, ndof={ndof}")
-    #if input("<enter> to continue, q to quit: " ) == 'q':
-    #  break
+    print(f"moment {m}: chisquare = {chisq}, ndof={ndof}")
+    if input("<enter> to continue, q to quit: " ) == 'q':
+      break
   return hchisq
 
 def histogram_moments_correlations(support_moments=0):
