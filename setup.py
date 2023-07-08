@@ -14,7 +14,7 @@ setup(
     license='GPL',
     url='https://github.com/rjones30/gluex_moments_analysis',
     packages=['gluex_moments_analysis'],
-    package_data={"src": ["*.C", "*.h", "*.c", "Makefile"]}
+    package_data={"src": ["*.C", "*.h", "*.c", "Makefile"]},
     install_requires=[
             'numpy',
             'awkward',
