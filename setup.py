@@ -7,7 +7,7 @@ from setuptools import setup
 # the name, author and contact, and description.
 setup(
     name='gluex_moments_analysis',
-    version='0.1.5',
+    version='0.1.6',
     author='Richard Jones',
     author_email='richard.t.jones@uconn.edu',
     description='toolkit for implementation of support-vector moments analysis',
@@ -15,7 +15,7 @@ setup(
     url='https://github.com/rjones30/gluex_moments_analysis',
     packages=['gluex_moments_analysis'],
     package_dir={"gluex_moments_analysis": "gluex_moments_analysis"},
-    package_data={"src": ["*.C", "*.h", "*.c", "Makefile"]},
+    package_data={"gluex_moments_analysis.src": ["*.C", "*.h", "*.c", "Makefile"]},
     install_requires=[
             'numpy',
             'awkward',
