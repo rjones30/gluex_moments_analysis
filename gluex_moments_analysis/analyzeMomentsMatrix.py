@@ -17,6 +17,8 @@ import time
 
 import gluex_moments_analysis.buildMomentsMatrix as bmm
 
+workdir = ".."
+
 def usage():
   print("usage: >>> import analyzeMomentsMatrix.py as ana")
   print(" >>> ana.open(\"filename.h5\")")
@@ -638,7 +640,7 @@ def model1_corrected_moments(imoments=range(169), kinbins=[], finebins=0):
   if len(kinbins) == 0:
     kinbins = standard_kinematic_bins(finebins)
   for tbin,mbin in kinbins:
-    datadir = f"../etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
+    datadir = f"{workdir}/etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
     f5saved = h5py.File(datadir + "/Msaved.h5")
     Ngen = f5saved['generated_subset'][()]
     M = f5saved['Moments'][:]
@@ -774,7 +776,7 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
   for tbin,mbin in standard_kinematic_bins(finebins):
     hs,hc,hm,hg = model1_corrected_moments(range(169), kinbins=[(tbin,mbin)])
     if len(constraints) > 0:
-      datadir = f"../etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
+      datadir = f"{workdir}/etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
       f5saved = h5py.File(datadir + "/Msaved.h5")
       M = f5saved["Moments"][:]
       Ngen = f5saved['generated_subset'][()]
@@ -907,7 +909,7 @@ def histogram_moments_correlations(support_moments=0):
   """
   hcorr = {}
   for tbin,mbin in standard_kinematic_bins():
-    datadir = f"../etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
+    datadir = f"{workdir}/etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
     f5sample = h5py.File(datadir + "/Msample.h5")
     cov = f5sample["sample_covariance"][:]
     Nmoments = cov.shape[0]
