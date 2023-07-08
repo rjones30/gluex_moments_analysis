@@ -52,6 +52,30 @@ mGJ,mGJ_ = 0,0
 usage()
 
 def open(intree_name):
+   """
+   Opens a ROOT file containing a moments TTree, and prepare for subsequent
+   analysis actions on the contents of the intree. The intree_name argument
+   should be in the format "<rootfile_pathname>:<tree_name>. Return value
+   is the uproot.TTree object constructed from intree_name. Moments are
+   stored in the intree in the order of increasing L,M with M=[-L,...,+L]
+   up to a maximum number of mPi0 moments for the pi0 subsystem, mEta for
+   the eta subsystem, and mGJ for the Gottfried-Jackson decay angles.
+   Elsewhere in this package, products of these three spherical moments
+   are indexed by a mash-up of the pi0, eta, and GJ moments indices,
+
+     moments_index = [[[(iPi0 * mEta +iEta) * mGJ + iGJ for iPi0 in range(mPi0)]
+                                                        for iEta in range(mEta)]
+                                                        for iGJ in range(mGJ)]
+
+   To restrict the number of moments included in an analysis, it is often
+   possible to truncate the series by specifying smaller values for mPi0,
+   mEta, and mGJ in subsequent function calls that access the tree than
+   are provided in the input tree itself, in which case the higher order
+   moments are simply dropped from the sums and ignored. This is why most
+   of the functions that read from the intree have optional arguments
+   mPi0, mEta, mGJ whose defaults select the full list of what appears
+   in the intree.
+   """
    global intree
    try:
       intree.close()
@@ -72,9 +96,10 @@ def select_events(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=0,
    """
    Select a subset of events from the most recently loaded tree, respecting the
    the specified limits in massEtaPi0 and abst, starting at event start and continuing
-   until event stop. If maxweight > 0 then perform accept-reject on the model weight,
-   otherwise all events are accepted. Return a list of selected event numbers and
-   their weights. If maxweight=0 then all weights are zero.
+   until event stop. If maxweight > 0 then perform accept-reject on the model weight
+   using maxweight as the cutoff, otherwise all events are accepted. Return value is
+   a pair of lists containing the selected event numbers and their weights.
+   If maxweight=0 then all weights are returned zero.
    """
    events = []
    weights = []
@@ -120,6 +145,15 @@ def select_events(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=0,
    return events,weights
 
 def compute_moments(events, mPi0=0, mEta=0, mGJ=0, weights=[], use_generated=0):
+   """
+   Read TTree data from the moments tree initialized by the latest call to open(),
+   and compute the sum of moments from rows listed in events. If weights is not
+   empty then it must have the same length as events, and the moment sums are
+   weighted by weights. If use_generated is nonzero then the moments computed
+   at the generated decay angles are used instead of the reconstructed. Return
+   value is a 2-tuple containing the [weighted] moments vector sum followed by
+   their statistical covariance matrix.
+   """
    if mPi0 == 0:
       mPi0 = globals()['mPi0']
    if mEta == 0:
@@ -152,6 +186,24 @@ def compute_moments(events, mPi0=0, mEta=0, mGJ=0, weights=[], use_generated=0):
 
 def histogram_moments(events, histograms, mPi0=0, mEta=0, mGJ=0,
                       weights=[], svectors=[], use_generated=0):
+   """
+   Convenience function for filling histograms of angular moments from
+   the moments intree accessed in the last call to open(). Only rows that
+   are found in the events list are added to the histograms. If supplied
+   then the weights argument must be a list of weights of the same length
+   as events, to be used when filling the histograms. The argument named
+   histogram must be a list of predefined 2D histograms with mass(eta,pi0)
+   on the x axis and |t| on the y axis. The length of the histogram list
+   must be at least the number of moments mPi0*mEta*mGJ. If svectors is not
+   empty, it must be a square matrix of dimension equal to Pi0*mEta*mGJ.
+   It is applied as a matrix product to the moments vector in intree,
+      new_moments = svectors @ old_moments
+   to form the linear combination new_moments, and the new_moments are
+   used to increment the histograms. The use_generated argument is a
+   True/False flat that selects whether generated or reconstructed
+   angles are used to compute the moments being histogrammed. Return
+   value is the total number of histograms updated.
+   """
    if mPi0 == 0:
       mPi0 = globals()['mPi0']
    if mEta == 0:
@@ -193,6 +245,24 @@ def histogram_moments(events, histograms, mPi0=0, mEta=0, mGJ=0,
 
 def histogram_acceptance(events, histograms, mPi0=0, mEta=0, mGJ=0,
                          weights=[], svectors=[], use_generated=0):
+   """
+   Computes the moments of the acceptance function using the moments intree
+   accessed in the last call to open(). Only rows that are found in the 
+   events list are included in the calculation. If weights are supplied
+   then the weights argument must be a list of weights of the same length
+   as events, to be used when computing the acceptance. The argument named
+   histogram must be a list of predefined 2D histograms with mass(eta,pi0)
+   on the x axis and |t| on the y axis. The length of the histogram list
+   must be at least the number of moments mPi0*mEta*mGJ. If svectors is not
+   empty, it must be a square matrix of dimension equal to Pi0*mEta*mGJ.
+   It is applied as a matrix product to the moments vector in intree,
+      new_moments = svectors @ old_moments
+   to form the linear combination new_moments, and the new_moments are
+   used to increment the histograms. The use_generated argument is a
+   True/False flat that selects whether generated or reconstructed
+   angles are used to compute the moments being histogrammed. Return value
+   is the total number of acceptance histograms filled.
+   """
    if mPi0 == 0:
       mPi0 = globals()['mPi0']
    if mEta == 0:
@@ -239,9 +309,13 @@ def histogram_acceptance(events, histograms, mPi0=0, mEta=0, mGJ=0,
                nmom += 1
    return nmom
 
-def buildMomentsMatrix_sequential(events, mPi0=0, mEta=0, mGJ=0, use_c_extension_library=False):
+def buildMomentsMatrix(events, mPi0=0, mEta=0, mGJ=0, use_c_extension_library=False):
    """
-   Single-threaded implementation, for small matrices and checks
+   Single-threaded implementation of buildMomentsMatrix, for small matrices and checks.
+   Constructs the M matrix from a subset of rows in intree selected by the events list.
+   On some platforms, significant speed-up is obtained by setting use_c_extention_library
+   to True, assuming it has already been built for the current platform. Return value is
+   a 2-tuple consisting of the computed M matrix, followed by its covariance matrix.
    """
    if mPi0 == 0:
       mPi0 = globals()['mPi0']
@@ -298,10 +372,11 @@ def buildMomentsMatrix_sequential(events, mPi0=0, mEta=0, mGJ=0, use_c_extension
                      Mvar[m * mGJ : (m+1) * mGJ, m_ * mGJ_ : (m_+1) * mGJ_] += M_Pi0_Eta**2 * Mvar_GJ
    return M, Mvar
 
-def buildMomentsMatrixSlice1(events, M, Mvar, iPi0, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_,
+def _buildMomentsMatrixSlice1(events, M, Mvar, iPi0, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_,
                              YmomPi0, YmomPi0_, YmomEta, YmomEta_, YmomGJ, YmomGJ_):
    """
-   Builds a slice of M and Mvar, for a single Pi0 moment.
+   Builds a slice of M and Mvar, for a single Pi0 moment. This is a helper function for
+   internal use by buildMomentsMatrix_threaded, do not call directly.
    """
    mstart = iPi0 * mEta * mGJ
    mend = mstart + mEta * mGJ
@@ -315,10 +390,12 @@ def buildMomentsMatrixSlice1(events, M, Mvar, iPi0, mPi0, mEta, mGJ, mPi0_, mEta
       C_buildMomentsMatrix.add_event(M_slice, Ymom, Ymom_)
       C_buildMomentsMatrix.add_event(Mvar_slice, Ysqr, Ysqr_)
 
-def buildMomentsMatrixSlice2(events, M, Mvar, iPi0, iEta, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_,
+def _buildMomentsMatrixSlice2(events, M, Mvar, iPi0, iEta, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_,
                              YmomPi0, YmomPi0_, YmomEta, YmomEta_, YmomGJ, YmomGJ_):
    """
    Builds a smaller slice of M and Mvar, for a single Pi0,Eta moment pair.
+   This is a helper function for internal use by buildMomentsMatrix_threaded,
+   do not call directly.
    """
    mstart = (iPi0 * mEta + iEta) * mGJ
    mend = mstart + mGJ
@@ -334,7 +411,7 @@ def buildMomentsMatrixSlice2(events, M, Mvar, iPi0, iEta, mPi0, mEta, mGJ, mPi0_
 
 def buildMomentsMatrix_threaded(events, mPi0=0, mEta=0, mGJ=0, threading_split_level=1):
    """
-   Multi-threaded implementation, for large matrices
+   Multi-threaded implementation of buildMomentsMatrix, for large matrices.
    """
    if mPi0 == 0:
       mPi0 = globals()['mPi0']
@@ -375,7 +452,7 @@ def buildMomentsMatrix_threaded(events, mPi0=0, mEta=0, mGJ=0, threading_split_l
       for iPi0 in range(mPi0):
          args = (events, M, Mvar, iPi0, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_,
                  YmomPi0, YmomPi0_, YmomEta, YmomEta_, YmomGJ, YmomGJ_)
-         t = threading.Thread(target=buildMomentsMatrixSlice1, args=args)
+         t = threading.Thread(target=_buildMomentsMatrixSlice1, args=args)
          threads.append(t)
          t.start()
    else:
@@ -383,7 +460,7 @@ def buildMomentsMatrix_threaded(events, mPi0=0, mEta=0, mGJ=0, threading_split_l
          for iEta in range(mEta):
             args = (events, M, Mvar, iPi0, iEta, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_,
                     YmomPi0, YmomPi0_, YmomEta, YmomEta_, YmomGJ, YmomGJ_)
-            t = threading.Thread(target=buildMomentsMatrixSlice2, args=args)
+            t = threading.Thread(target=_buildMomentsMatrixSlice2, args=args)
             threads.append(t)
             t.start()
    print("threads joining")
@@ -393,6 +470,10 @@ def buildMomentsMatrix_threaded(events, mPi0=0, mEta=0, mGJ=0, threading_split_l
    return M, Mvar
 
 def save_output(M, Mvar, acc_events, gen_events, outfile):
+   """
+   Save results from buildMomentsMatrix() together with some properties
+   of the dataset used to compute M which might be useful later on.
+   """
    h5out = h5py.File(outfile, 'w')
    h5out.create_dataset("Moments", data=M)
    h5out.create_dataset("Moments_variance", data=Mvar)

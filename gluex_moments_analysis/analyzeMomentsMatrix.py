@@ -20,7 +20,6 @@ import buildMomentsMatrix as bmm
 def usage():
   print("usage: >>> import analyzeMomentsMatrix.py as ana")
   print(" >>> ana.open(\"filename.h5\")")
-  print(" >>> w,v = ana.do_svd()")
   print(" >>> h = ana.histogram_M_diagonal()")
   print(" >>> h = ana.histogram_M_diagonal_GJ0()")
   print(" >>> h = ana.histogram_M_diagonal_GJ0_Eta0()")
@@ -42,6 +41,11 @@ h5inputs = {}
 h2dsupport = {}
 
 def open(h5input):
+  """
+  Recover M matrix and its covariance matrix saved in file pathname
+  h5input, probably from a prior run of buildMomentsMatrix.save().
+  Return value is the h5py.File object connected to h5input.
+  """
   global f5
   global M
   global Mvar
@@ -51,16 +55,14 @@ def open(h5input):
   h5inputs[0] = f5
   return f5
 
-def do_svd(h5input=0, lower=True):
-  if not h5input in h5inputs:
-    try:
-      h5inputs[0] = 1
-    except:
-      print("unable to open input moments file", h5input)
-      return 0
-  return scipy.linalg.eigh(M, lower=lower)
-
 def histogram_M_diagonal(h5input=0):
+  """
+  Read a M matrix from h5input (defaults to last M read from a file)
+  and run some statistics over its values down the diagonal, which
+  represent the acceptance eigenvalues in the ideal acceptance limit.
+  Return value is a histogram of the diagonal values ordered by the
+  moment index.
+  """
   if not h5input in h5inputs:
     try:
       h5inputs[h5input] = open(h5input)
@@ -100,6 +102,12 @@ def histogram_M_diagonal(h5input=0):
   return hMdiag
 
 def histogram_M_diagonal_GJ0(h5input=0):
+  """
+  Variant of histogram_M_diagonal that examines only the subset of
+  diagonal elements corresponding to L=0,M=0 in the Gottfried-Jackson
+  angles.  Return value is a histogram of the diagonal values ordered
+  by the moment index with iGJ=0.
+  """
   if not h5input in h5inputs:
     try:
       h5inputs[h5input] = open(h5input)
@@ -120,6 +128,12 @@ def histogram_M_diagonal_GJ0(h5input=0):
   return hMdiag
 
 def histogram_M_diagonal_GJ0_Eta0(h5input=0):
+  """
+  Variant of histogram_M_diagonal that examines only the subset of
+  diagonal elements corresponding to L=0,M=0 in the eta decay angles.
+  Return value is a histogram of the diagonal values ordered
+  by the moment index with iEta=0.
+  """
   if not h5input in h5inputs:
     try:
       h5inputs[h5input] = open(h5input)
@@ -140,6 +154,17 @@ def histogram_M_diagonal_GJ0_Eta0(h5input=0):
   return hMdiag
 
 def histogram_M_offdiagonal(h5input=0):
+  """
+  Read a M matrix from h5input (defaults to last M read from a file)
+  and run some statistics over its values off the diagonal, which
+  represent the departure from the ideal acceptance limit. Return
+  value is a 4-tuple of 1D histograms displaying the distribution
+  of the normalized off-diagonal matrix elements of M, ordered as
+    [0] : elements of M above the diagonal
+    [1] : elements of M below the diagonal
+    [2] : statistical error on M elements above the diagonal
+    [3] : statistical error on M elements below the diagonal
+  """
   if not h5input in h5inputs:
     try:
       h5inputs[open(h5input)] = 1
@@ -200,6 +225,11 @@ def histogram_M_offdiagonal(h5input=0):
   return (hMabovediag,hMbelowdiag,hEabovediag,hEbelowdiag)
 
 def histogram_offdiagonal(name, M, Mvar):
+  """
+  Variant of histogram_M_offdiagonal() where the matrix M and its
+  covariance matrix are supplied as arguments rather than being
+  read from an hdf5 input file.
+  """
   hMabovediag = ROOT.TH1D(f"hMabovediag{name}", "M above-diagonal elements normalized to diagonal", 10000,-0.1, 0.1)
   hMbelowdiag = ROOT.TH1D(f"hMbelowdiag{name}", "M below-diagonal elements normalized to diagonal", 10000,-0.1, 0.1)
   hEabovediag = ROOT.TH1D(f"hEabovediag{name}", "M above-diagonal errors normalized to diagonal", 10000,-0.1, 0.1)
@@ -223,6 +253,12 @@ def histogram_offdiagonal(name, M, Mvar):
   return (hMabovediag, hMbelowdiag, hEabovediag, hEbelowdiag)
 
 def histogram_eigenvalues(name, title, w, normfactor=1):
+  """
+  Convenience function to form a histogram of a vector w, interpreted
+  as an ordered list of the eigenvalues of the M matrix. Return value
+  is a TH1D object with name,title given in the arguments. Optional
+  argument normfactor is multiplied by w when it is histogrammed.
+  """
   ndim = len(w)
   h = ROOT.TH1D(name, title, ndim, 0, ndim)
   for i in range(ndim):
@@ -232,6 +268,13 @@ def histogram_eigenvalues(name, title, w, normfactor=1):
   return h
 
 def histogram_moments(name, title, moments, errors):
+  """
+  Convenience function to form a histogram of vector moments, treated
+  as an ordered list of angular moments of a sample, with statistical
+  uncertainty provided in the errors aregument. Return value is a
+  new TH1D object with name,title given in the arguments. Optional
+  argument normfactor is multiplied by w when it is histogrammed.
+  """
   ndim = len(moments)
   h = ROOT.TH1D(name, title, ndim, 0, ndim)
   for i in range(ndim):
@@ -243,20 +286,86 @@ def histogram_moments(name, title, moments, errors):
 
 def histograms_of_moments(Nmoments, basename, basetitle, 
                           atitles, nbins, alimits):
-   histograms = []
-   for i in range(Nmoments):
-      name = basename.format(i)
-      title = basetitle.format(i)
-      h = ROOT.TH2D(name, title, nbins[0], alimits[0][0], alimits[0][1],
-                                 nbins[1], alimits[1][0], alimits[1][1])
-      h.GetXaxis().SetTitle(atitles[0])
-      h.GetYaxis().SetTitle(atitles[1])
-      histograms.append(h)
-   return histograms
+  """
+  Returns a list of empty 2D histograms, one per moment 0..(Nmoments-1)
+  with basename [basetitle] being string templates for the histogram
+  names [titles] with embedded {0} strings subsituted for the moment
+  index. Desired axis titles are supplied as atitles[0] for the x axis,
+  atitles[1] for the y axis. Similarly, nbins[0] and nbins[1] are the
+  number of histogram divisions along x and y, with alimits[0][0] and
+  alimits[0][1] being the x axis limits, and alimits[1][0],alimits[1][1]
+  being the corresponding limits along y.
+  """
+  histograms = []
+  for i in range(Nmoments):
+     name = basename.format(i)
+     title = basetitle.format(i)
+     h = ROOT.TH2D(name, title, nbins[0], alimits[0][0], alimits[0][1],
+                                nbins[1], alimits[1][0], alimits[1][1])
+     h.GetXaxis().SetTitle(atitles[0])
+     h.GetYaxis().SetTitle(atitles[1])
+     histograms.append(h)
+  return histograms
 
 def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
                     sample_subset=range(5), acceptance_subset=range(5,10),
                     Mmatrix="Msaved.h5"):
+  """
+  The primary functionality of the analyzeMomentsMatrix module is found within
+  this one function. It carries out three tasks in sequence, as follows:
+    1. generates a mock data sample on a single bin in (mX,t)
+       a) scans over the Monte Carlo set devoted to sample creation
+          and counts all of the generated events within the kinematic bin;
+       b) uses the model weights from the scan in 1a to histogram the true
+          values of the model moments within this kinematic bin, to be used
+          later in a comparison with the acceptance-corrected moments;
+       c) using the maximum model weight in the generated events scan, pass
+          over the reconstructed events from the same generated sample and
+          perform accept-reject to select the mock data sample within this
+          kinematic bin.
+    2. generate the M acceptance matrix on this same bin in (mX,t)
+       a) compute the M matrix and its error on the unweighted Monte Carlo
+          sample assigned to acceptance estimation, different from the one
+          used to produce the mock data sample;
+       b) diagonalize M to find the acceptance support moments vectors in
+          this kinematic bin;
+    3. map out the (mX,t) dependence of the acceptance eigenvalues within
+       this kinematic bin for each support vector moment from step 2.
+       a) histogram the acceptance in (mX,t) for each support vector moment
+          as a sum over unweighted events in the acceptance subset;
+       b) normalize the acceptance to the number of generated events in
+          (mX,t) over the same kinematic bin;
+  Even with multithreaded uproot processing on large-memory machine, the above
+  steps take too long for interactive work because each call takes about 1 hour
+  to complete, and it must be repeated for each kinematic bin. The shell script
+  rebuildMoments.sh has been provided in the scripts directory to automate the
+  original execution of analyze_moments over the full set of kinematic bins.
+  After this has been done once, analyze_moments saves the results in the work
+  directory so that subsequent calls to analyze_moments are fast.
+
+  Input arguments:
+    massEtaPi0_limits, abst_limits: defines the kinematic bin to be analyzed
+    model: normally should be =1 for operation as defined above, if =0 then
+           assign uniform weight to all events, simulating a model with H00=1
+           and all other moments set to 0, useful for testing software.
+    sample_subset, acceptance_subset: a list of indices in the range [0..9]
+           assigning portions of the original 100 million event Monte Carlo
+           dataset to formation of the mock data sample vs estimation of the
+           experimental acceptance, in blocks of 10 million events.
+    Mmatrix: don't assign this, expert use only.
+
+  Return value: a 4-tuple consisting of
+    [0]: TH2D histogram containing the experimental moments sum over the
+         mock data sample, without any acceptance correction, as a function
+         of (mX,t) within this kinematic bin;
+    [1]: TH2D histogram containing the acceptance-corrected moments derived
+         from the mock data sample by support-vector acceptance correction,
+         as a function of (mX,t) within this kinematic bin;
+    [2]: TH2D histogram of the generated model moments computed directly 
+         from the generated event sample weighted by the trial model, scaled
+         by maxweight for direct comparison with [1];
+    [3]: TH2D difference between [1] and [2].
+  """
   kinbins = (190, 25)
   kinbounds = ((0.6,2.5), (0.0,2.5)) # mass in GeV, |t| in GeV^2
 
@@ -470,6 +579,15 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
   return hsamp,hcorr,hmodel,hdiff
 
 def standard_kinematic_bins(finebins=0):
+  """
+  Returns a standard subdivision of the (mX,t) plane into kinematic bins,
+  according to a user-selected scheme. This can be extended as desired,
+  but doing so will require a new pass over analyze_moments() for the
+  new set of kinematic bins. Current choices are:
+    finebins=0: 24 coarse bins, fastest option, sufficient for many things;
+    finebins=1: 48 finer bins, finer segmentation in mX, same in t;
+    finebins=2: 144 finer bins, finer segmentation in both mX and t;
+  """
   if finebins == 2:
     tbins = ((0.0,0.2), (0.2,0.3), (0.3,0.45), (0.45,0.6),
              (0.6,0.9), (0.9,1.2), (1.2,1.6), (1.6,2.4))
@@ -488,7 +606,6 @@ def standard_kinematic_bins(finebins=0):
     tbins = ((0.0,0.3), (0.3,0.6), (0.6,1.2), (1.2,2.5))
     mbins = ((0.6,0.9), (0.9,1.2), (1.2,1.5),
              (1.5,1.8), (1.8,2.1), (2.1,2.5))
-
   kinbins = []
   for tbin in tbins:
     for mbin in mbins:
@@ -496,6 +613,25 @@ def standard_kinematic_bins(finebins=0):
   return kinbins
 
 def model1_corrected_moments(imoments=range(169), kinbins=[], finebins=0):
+  """
+  This function takes What analyze_moments() does for a single kinematic bin
+  in (mX,t), and applies it to the full range kinematic range covered by the
+  standard kinematic binning scheme finebins. It reads from the saved hdf5
+  files in the standard bin directories that it assumes are located under the
+  work directory, and assembles the complete results for the mock data sample,
+  both with and without acceptance correction, together with the calculated
+  moments from the trial model straight from the generator. The returned
+  result is a 4-tuple consising of the following lists, each one of the
+  same length as the imoments input list.
+   [0]: TH2D histograms on (mX,t) of the sample moments listed in imoments,
+        prior to acceptance correction;
+   [1]: TH2D histograms on (mX,t) of the sample moments listed in imoments
+        after the support-vector acceptance correction has been applied;
+   [2]: TH2D histograms on (mX,t) of the trial model moments straight from
+        the generator, averaged over the same binning scheme as [0] and [1];
+   [3]: TH2D histogram on (mX,t) of the number of generated events in the
+        sample used to estimate the acceptance, for acceptance normalization.
+  """
   hsample = [0 for i in imoments]
   hcorrect = [0 for i in imoments]
   hmodel1 = [0 for i in imoments]
@@ -575,11 +711,20 @@ def model1_corrected_moments(imoments=range(169), kinbins=[], finebins=0):
 
 def apply_constraints(S, moments, covariance, histograms=[]):
   """
+  Takes in a set of acceptance-corrected sample moments together with
+  their covariance matrix, and applies the constraints contained in
+  argument S, and returns the updated moments and covariance matrix
+  as the first two elements of a 3-tuple. If argument histograms is
+  supplied in the argument list then it must have the same length
+  as moments and as the dimension of square matrix covariance, and
+  represent the acceptance-corrected sample moments as a TH1D or TH2D.
   Matrix constraint S is in the form of a linear condition among the
   moments vector h, expressed as S h = 0. The number of columns must
   be equal to the number of moments, while the number of rows is the
-  number of constraint equations. If argument histograms is supplied
-  it must have the same dimensions as moments.
+  number of constraint equations. If argument histograms is present
+  in the input argument list, then the updated histograms following
+  application of the constraints will be returned in the third 
+  element of the return 3-tuple, otherwise an empty list.
   """
   C = covariance
   St = np.transpose(S)
@@ -605,6 +750,13 @@ def apply_constraints(S, moments, covariance, histograms=[]):
 
 def scan_em(corrected=1, scale=1, tcut=0, finebins=0, 
             hchisq=0, constraints=[], hchisq2=0):
+  """
+  Cycle through the kinematic bins and perform a systematic comparison
+  between the acceptance-corrected moments and those from the original
+  trial model. The distribution of chisquare values from a projection
+  of each of the moments onto the mX axis for a given slice through |t|
+  is returned
+  """
   if hchisq == 0:
     title = "#chi^{2} distribution for corrected-model moments, 95 dof"
     hchisq = ROOT.TH1D("hchisq", title, 100, 0, 200)
@@ -742,6 +894,17 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
   return hchisq,hchisq2
 
 def histogram_moments_correlations(support_moments=0):
+  """
+  Compute a statistical measure of the degree of correlation between the
+  acceptance-corrected sample moments in the standard spherical basis
+  (support_moments=0) or the support moments basis (support_moments=1).
+  Return value is a histogram that reports the answer as a distribution
+  of the product of the diagonal elements of the covariance matrix C[i,i]
+  times the corresponding diagonal element of its inverse (1/C)[i,i]. 
+  For an uncorrelated set of moments, all such products are 1, otherwise
+  they are less than 1. Deviation from unity is a measure of the degree
+  to which the moments can be treated as more or less uncorrelated.
+  """
   hcorr = {}
   for tbin,mbin in standard_kinematic_bins():
     datadir = f"../etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"

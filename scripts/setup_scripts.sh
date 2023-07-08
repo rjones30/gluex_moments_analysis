@@ -1,1 +1,1 @@
-export PYTHONPATH=$PYTHONPATH:/srv/scripts
+export PYTHONPATH=$PYTHONPATH:/srv/gluex_moments_analysis
