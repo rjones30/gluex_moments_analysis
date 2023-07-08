@@ -16,6 +16,7 @@ setup(
     packages=['gluex_moments_analysis'],
     install_requires=[
             'numpy',
+            'awkward',
             'uproot',
             'h5py',
             'scipy',
