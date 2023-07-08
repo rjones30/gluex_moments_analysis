@@ -18,8 +18,6 @@ setup(
             'numpy',
             'uproot',
             'h5py',
-            'threading',
             'scipy',
-            'time',
     ]
 )
