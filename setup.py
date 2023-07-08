@@ -23,6 +23,5 @@ setup(
             'threading',
             'scipy',
             'time',
-            'math'
     ]
 )
