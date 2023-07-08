@@ -15,7 +15,7 @@ import threading
 import scipy.linalg
 import time
 
-import buildMomentsMatrix as bmm
+import gluex_moments_analysis.buildMomentsMatrix as bmm
 
 def usage():
   print("usage: >>> import analyzeMomentsMatrix.py as ana")
