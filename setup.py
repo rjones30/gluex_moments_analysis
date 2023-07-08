@@ -16,7 +16,6 @@ setup(
     packages=['gluex_moments_analysis'],
     install_requires=[
             'numpy',
-            'Math',
             'ROOT',
             'uproot',
             'h5py',
