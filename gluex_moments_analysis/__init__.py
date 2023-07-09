@@ -2,7 +2,8 @@ import subprocess
 import sys
 import os
 
-srcdir = __file__.split('/')[:-1] + "/src"
-subprocess.run([f"cd {srcdir};", "make"], shell=True)
-sys.path.append(srcdir)
+srcdir = "/".join(__file__.split('/')[:-1]) + "/src"
+print(srcdir)
+subprocess.run(args=[f"cd {srcdir} && make"], shell=True)
+sys.path += [srcdir]
 
