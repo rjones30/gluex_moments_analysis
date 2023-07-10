@@ -92,7 +92,8 @@ def open(intree_name):
    return intree
 
 def select_events(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=0, 
-                  start=0, stop=None, maxweight=0, use_generated=0):
+                  start=0, stop=None, maxweight=0, use_generated=0,
+                  use_generated_angles=1):
    """
    Select a subset of events from the most recently loaded tree, respecting the
    the specified limits in massEtaPi0 and abst, starting at event start and continuing
@@ -109,7 +110,7 @@ def select_events(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=0,
       columns['|t|'] = "abst_"
    if model == 1:
       columns['mom'] = "model1moment"
-      if "YmomGJ_" in intree:
+      if use_generated_angles and "YmomGJ_" in intree:
          columns['Y'] = "YmomGJ_"
       else:
          columns['Y'] = "YmomGJ"
@@ -144,7 +145,8 @@ def select_events(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=0,
             weights.append(weight)
    return events,weights
 
-def compute_moments(events, mPi0=0, mEta=0, mGJ=0, weights=[], use_generated=0):
+def compute_moments(events, mPi0=0, mEta=0, mGJ=0,
+                    weights=[], use_generated_angles=1):
    """
    Read TTree data from the moments tree initialized by the latest call to open(),
    and compute the sum of moments from rows listed in events. If weights is not
@@ -161,7 +163,7 @@ def compute_moments(events, mPi0=0, mEta=0, mGJ=0, weights=[], use_generated=0):
    if mGJ == 0:
       mGJ = globals()['mGJ']
    columns = {}
-   if use_generated and "YmomGJ_" in intree:
+   if use_generated_angles and "YmomGJ_" in intree:
       columns['Y'] = "YmomGJ_"
    else:
       columns['Y'] = "YmomGJ"
@@ -185,7 +187,8 @@ def compute_moments(events, mPi0=0, mEta=0, mGJ=0, weights=[], use_generated=0):
    return moments,momentscov
 
 def histogram_moments(events, histograms, mPi0=0, mEta=0, mGJ=0,
-                      weights=[], svectors=[], use_generated=0):
+                      weights=[], svectors=[], use_generated=0,
+                      use_generated_angles=1):
    """
    Convenience function for filling histograms of angular moments from
    the moments intree accessed in the last call to open(). Only rows that
@@ -215,7 +218,10 @@ def histogram_moments(events, histograms, mPi0=0, mEta=0, mGJ=0,
    if use_generated and "massEtaPi0_" in intree:
       columns['mX'] = "massEtaPi0_"
       columns['|t|'] = "abst_"
+   if use_generated_angles and "YmomGJ_" in intree:
       columns['Y'] = "YmomGJ_"
+   else:
+      columns['Y'] = "YmomGJ"
 
    decomp = ThreadPoolExecutor(32)
    arrays = intree.arrays(columns.values(), 
@@ -244,7 +250,8 @@ def histogram_moments(events, histograms, mPi0=0, mEta=0, mGJ=0,
    return nmom
 
 def histogram_acceptance(events, histograms, mPi0=0, mEta=0, mGJ=0,
-                         weights=[], svectors=[], use_generated=0):
+                         weights=[], svectors=[], use_generated=0,
+                         use_generated_angles=1):
    """
    Computes the moments of the acceptance function using the moments intree
    accessed in the last call to open(). Only rows that are found in the 
@@ -274,7 +281,7 @@ def histogram_acceptance(events, histograms, mPi0=0, mEta=0, mGJ=0,
    if use_generated and "massEtaPi0_" in intree:
       columns['mX'] = "massEtaPi0_"
       columns['|t|'] = "abst_"
-   if "YmomGJ_" in intree:
+   if use_generated_angles and "YmomGJ_" in intree:
       columns['Y_'] = "YmomGJ_"
 
    decomp = ThreadPoolExecutor(32)
@@ -285,7 +292,7 @@ def histogram_acceptance(events, histograms, mPi0=0, mEta=0, mGJ=0,
    massEtaPi0 = arrays[columns['mX']]
    abst = arrays[columns['|t|']]
    YmomGJ = arrays[columns['Y']]
-   if "YmomGJ_" in intree:
+   if "Y_" in columns:
       YmomGJ_ = arrays[columns['Y_']]
    else:
       YmomGJ_ = YmomGJ
@@ -309,7 +316,8 @@ def histogram_acceptance(events, histograms, mPi0=0, mEta=0, mGJ=0,
                nmom += 1
    return nmom
 
-def buildMomentsMatrix(events, mPi0=0, mEta=0, mGJ=0, use_c_extension_library=False):
+def buildMomentsMatrix(events, mPi0=0, mEta=0, mGJ=0,
+                       use_c_extension_library=False, use_generated_angles=1):
    """
    Single-threaded implementation of buildMomentsMatrix, for small matrices and checks.
    Constructs the M matrix from a subset of rows in intree selected by the events list.
@@ -329,7 +337,7 @@ def buildMomentsMatrix(events, mPi0=0, mEta=0, mGJ=0, use_c_extension_library=Fa
       print("Reduce the number of moments or split M into subblocks.")
       return 0,0
    columns = {'YmomPi0': "YmomPi0", 'YmomEta': "YmomEta", 'YmomGJ': "YmomGJ"}
-   if "YmomPi0_" in intree:
+   if use_generated_angles and "YmomPi0_" in intree:
       columns['YmomPi0_'] = "YmomPi0_"
       columns['YmomEta_'] = "YmomEta_"
       columns['YmomGJ_'] = "YmomGJ_"
@@ -346,6 +354,10 @@ def buildMomentsMatrix(events, mPi0=0, mEta=0, mGJ=0, use_c_extension_library=Fa
       YmomPi0_ = arrays[columns['YmomPi0_']]
       YmomEta_ = arrays[columns['YmomEta_']]
       YmomGJ_ = arrays[columns['YmomGJ_']]
+   else:
+      YmomPi0_ = YmomPi0
+      YmomEta_ = YmomEta
+      YmomGJ_ = YmomGJ
    mPi0_, mEta_, mGJ_ = mPi0, mEta, mGJ
    M = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
    Mvar = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
