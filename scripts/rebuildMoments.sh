@@ -50,8 +50,8 @@ function build_moments {
     cd $workdir || clean_exit "unable to descend into workdir $workdir"
     cat >rebuild.py <<EOI
 import sys
-import analyzeMomentsMatrix as ana
-h=ana.analyze_moments(massEtaPi0_limits=($mspec), abst_limits=($tspec), model=1, use_generated_moments_for_acceptance=0)
+import gluex_moments_analysis.analyzeMomentsMatrix as ana
+h=ana.analyze_moments(massEtaPi0_limits=($mspec), abst_limits=($tspec), model=1, use_generated_angles_for_acceptance=0)
 sys.exit(0)
 EOI
     python3 rebuild.py || clean_exit "script rebuild.py failed"
