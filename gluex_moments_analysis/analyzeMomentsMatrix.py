@@ -772,10 +772,7 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
   hsample = [0] * 169
   hcorrect = [0] * 169
   hmodel1 = [0] * 169
-  if interactive:
-    prompt = True
-  else:
-    prompt = 'g'
+  prompt = interactive
   for tbin,mbin in standard_kinematic_bins(finebins):
     hs,hc,hm,hg = model1_corrected_moments(range(169), kinbins=[(tbin,mbin)])
     if len(constraints) > 0:
@@ -818,12 +815,13 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
       h1.Draw()
       h2.Draw("same")
       ROOT.gROOT.FindObject("c1").Update()
-      print(f"chi2 for bin {mbin},{tbin} is {chi2:.1f} / {ndof}")
-      if prompt != 'g':
-        prompt = input("g to continue without prompt, " +
-                       "q to quit? ")
-        if prompt == 'q':
-           return 0,0
+      if interactive:
+        print(f"chi2 for bin {mbin},{tbin} is {chi2:.1f} / {ndof}")
+        if prompt != 'g':
+          prompt = input("g to continue without prompt, " +
+                         "q to quit? ")
+          if prompt == 'q':
+             return 0,0
     for m in range(169):
       try:
         hsample[m].Add(hs[m])
@@ -833,10 +831,7 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
         hsample[m] = hs[m].Clone()
         hcorrect[m] = hc[m].Clone()
         hmodel1[m] = hm[m].Clone()
-  if interactive:
-    prompt = True
-  else:
-    prompt = 'g'
+  prompt = interactive
   for m in range(169):
     if corrected:
       h = hcorrect[m]
@@ -892,13 +887,14 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
     h2.Draw("same")
     c1 = ROOT.gROOT.FindObject("c1")
     c1.Update()
-    print(f"moment {m}: chisquare = {chisq}, ndof={ndof}")
-    if prompt != 'g':
-      prompt = input("<enter> to continue, " +
-                     "g to continue without prompt, " +
-                     "q to quit: ")
-      if prompt == 'q':
-        break
+    if interactive:
+      print(f"moment {m}: chisquare = {chisq}, ndof={ndof}")
+      if prompt != 'g':
+        prompt = input("<enter> to continue, " +
+                       "g to continue without prompt, " +
+                       "q to quit: ")
+        if prompt == 'q':
+          break
   return hchisq,hchisq2
 
 def histogram_moments_correlations(support_moments=0):
