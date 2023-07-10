@@ -774,7 +774,7 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
   hmodel1 = [0] * 169
   if interactive:
     prompt = True
-  else
+  else:
     prompt = 'g'
   for tbin,mbin in standard_kinematic_bins(finebins):
     hs,hc,hm,hg = model1_corrected_moments(range(169), kinbins=[(tbin,mbin)])
@@ -835,7 +835,7 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
         hmodel1[m] = hm[m].Clone()
   if interactive:
     prompt = True
-  else
+  else:
     prompt = 'g'
   for m in range(169):
     if corrected:
