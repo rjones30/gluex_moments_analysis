@@ -772,7 +772,10 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
   hsample = [0] * 169
   hcorrect = [0] * 169
   hmodel1 = [0] * 169
-  prompt = interactive
+  if interactive:
+    prompt = True
+  else
+    prompt = 'g'
   for tbin,mbin in standard_kinematic_bins(finebins):
     hs,hc,hm,hg = model1_corrected_moments(range(169), kinbins=[(tbin,mbin)])
     if len(constraints) > 0:
@@ -830,7 +833,10 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
         hsample[m] = hs[m].Clone()
         hcorrect[m] = hc[m].Clone()
         hmodel1[m] = hm[m].Clone()
-  prompt = interactive
+  if interactive:
+    prompt = True
+  else
+    prompt = 'g'
   for m in range(169):
     if corrected:
       h = hcorrect[m]
