@@ -421,7 +421,8 @@ def _buildMomentsMatrixSlice2(events, M, Mvar, iPi0, iEta, mPi0, mEta, mGJ, mPi0
       C_buildMomentsMatrix.add_event(M_slice, Ymom, Ymom_)
       C_buildMomentsMatrix.add_event(Mvar_slice, Ysqr, Ysqr_)
 
-def buildMomentsMatrix_threaded(events, mPi0=0, mEta=0, mGJ=0, threading_split_level=1):
+def buildMomentsMatrix_threaded(events, mPi0=0, mEta=0, mGJ=0, threading_split_level=1,
+                                use_generated_angles=1):
    """
    Multi-threaded implementation of buildMomentsMatrix, for large matrices.
    """
@@ -437,7 +438,7 @@ def buildMomentsMatrix_threaded(events, mPi0=0, mEta=0, mGJ=0, threading_split_l
       print("Reduce the number of moments or split M into subblocks.")
       return 0,0
    columns = {'YmomPi0': "YmomPi0", 'YmomEta': "YmomEta", 'YmomGJ': "YmomGJ"}
-   if "YmomPi0_" in intree:
+   if use_generated_angles and "YmomPi0_" in intree:
       columns['YmomPi0_'] = "YmomPi0_"
       columns['YmomEta_'] = "YmomEta_"
       columns['YmomGJ_'] = "YmomGJ_"
@@ -454,6 +455,10 @@ def buildMomentsMatrix_threaded(events, mPi0=0, mEta=0, mGJ=0, threading_split_l
       YmomPi0_ = arrays[columns['YmomPi0_']]
       YmomEta_ = arrays[columns['YmomEta_']]
       YmomGJ_ = arrays[columns['YmomGJ_']]
+   else:
+      YmomPi0_ = YmomPi0
+      YmomEta_ = YmomEta
+      YmomGJ_ = YmomGJ
    mPi0_, mEta_, mGJ_ = mPi0, mEta, mGJ
    M = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
    Mvar = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
