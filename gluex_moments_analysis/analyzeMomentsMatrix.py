@@ -751,7 +751,7 @@ def apply_constraints(S, moments, covariance, histograms=[]):
   return h, CC, histograms_cons
 
 def scan_em(corrected=1, scale=1, tcut=0, finebins=0, 
-            hchisq=0, constraints=[], hchisq2=0):
+            hchisq=0, constraints=[], hchisq2=0, interactive=True):
   """
   Cycle through the kinematic bins and perform a systematic comparison
   between the acceptance-corrected moments and those from the original
@@ -772,7 +772,7 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
   hsample = [0] * 169
   hcorrect = [0] * 169
   hmodel1 = [0] * 169
-  prompt = True
+  prompt = interactive
   for tbin,mbin in standard_kinematic_bins(finebins):
     hs,hc,hm,hg = model1_corrected_moments(range(169), kinbins=[(tbin,mbin)])
     if len(constraints) > 0:
@@ -830,7 +830,7 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
         hsample[m] = hs[m].Clone()
         hcorrect[m] = hc[m].Clone()
         hmodel1[m] = hm[m].Clone()
-  prompt = True
+  prompt = interactive
   for m in range(169):
     if corrected:
       h = hcorrect[m]
