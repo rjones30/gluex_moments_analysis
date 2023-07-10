@@ -51,7 +51,7 @@ function build_moments {
     cat >rebuild.py <<EOI
 import sys
 import analyzeMomentsMatrix as ana
-h=ana.analyze_moments(massEtaPi0_limits=($mspec), abst_limits=($tspec), model=1)
+h=ana.analyze_moments(massEtaPi0_limits=($mspec), abst_limits=($tspec), model=1, use_generated_moments_for_acceptance=0)
 sys.exit(0)
 EOI
     python3 rebuild.py || clean_exit "script rebuild.py failed"
