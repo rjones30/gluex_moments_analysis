@@ -17,7 +17,7 @@ import time
 
 import gluex_moments_analysis.buildMomentsMatrix as bmm
 
-workdir = ".."
+workdir = "../trial1"
 
 def usage():
   print("usage: >>> import analyzeMomentsMatrix.py as ana")
