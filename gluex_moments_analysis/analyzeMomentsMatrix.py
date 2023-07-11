@@ -311,7 +311,8 @@ def histograms_of_moments(Nmoments, basename, basetitle,
 
 def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
                     sample_subset=range(5), acceptance_subset=range(5,10),
-                    Mmatrix="Msaved.h5", use_generated_angles_for_acceptance=1):
+                    Mmatrix="Msaved.h5", use_generated_angles_for_acceptance=1,
+                    use_generated_angles_for_sampling=1):
   """
   The primary functionality of the analyzeMomentsMatrix module is found within
   this one function. It carries out three tasks in sequence, as follows:
@@ -418,6 +419,7 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
       bmm.open(f"../etapi0_moments_x10_{i}.root:etapi0_moments")
       events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
                                          abst_limits=abst_limits, model=1,
+                       use_generated_angles=use_generated_angles_for_sampling,
                                          maxweight=maxweight)
       mock_events += events
       tstep1d = time.perf_counter()
@@ -512,7 +514,8 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
       bmm.open(f"../etapi0_moments_x10_{i}.root:etapi0_moments")
       events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
                                          abst_limits=abst_limits)
-      bmm.histogram_acceptance(events, h2daccepted, mPi0=1, mEta=1, svectors=v)
+      bmm.histogram_acceptance(events, h2daccepted, mPi0=1, mEta=1, svectors=v,
+                    use_generated_angles=use_generated_angles_for_acceptance)
       tstep3a = time.perf_counter()
       print(f"  time to histogram acceptance moments: {tstep3a-tstart3:.3f}s")
       bmm.open(f"../generated_moments_x10_{i}.root:etapi0_moments")

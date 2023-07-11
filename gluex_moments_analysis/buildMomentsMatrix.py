@@ -146,7 +146,7 @@ def select_events(massEtaPi0_limits=(0,99), abst_limits=(0,99), model=0,
    return events,weights
 
 def compute_moments(events, mPi0=0, mEta=0, mGJ=0,
-                    weights=[], use_generated_angles=1):
+                    weights=[], use_generated_angles=0):
    """
    Read TTree data from the moments tree initialized by the latest call to open(),
    and compute the sum of moments from rows listed in events. If weights is not
@@ -188,7 +188,7 @@ def compute_moments(events, mPi0=0, mEta=0, mGJ=0,
 
 def histogram_moments(events, histograms, mPi0=0, mEta=0, mGJ=0,
                       weights=[], svectors=[], use_generated=0,
-                      use_generated_angles=1):
+                      use_generated_angles=0):
    """
    Convenience function for filling histograms of angular moments from
    the moments intree accessed in the last call to open(). Only rows that
