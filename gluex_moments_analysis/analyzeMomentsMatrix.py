@@ -795,7 +795,10 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
       refercov = f5sample['reference_covariance'][:]
       correctmom = Minv @ samplemom
       correctcov = Minv @ samplecov @ np.transpose(Minv)
-      cmom,ccov,chc = apply_constraints(constraints, correctmom, correctcov, hc)
+      if False:
+        cmom,ccov,chc = apply_constraints(constraints, correctmom, correctcov, hc)
+      else:
+        cmom,ccov,chc = (correctmom, correctcov, 0)
       title = f"moments for |t|={tbin}, m_{{X}}={mbin}"
       h1 = ROOT.TH1D("h1", "constrained " + title, 169, 0, 169)
       h1.GetXaxis().SetTitle("moments index")
@@ -805,16 +808,15 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
       h2.GetXaxis().SetTitle("moments index")
       h2.GetYaxis().SetTitle("model moment")
       h2.SetStats(0)
-      ndof,chi2 = 0,0
       for i in range(169):
         h1.SetBinContent(i+1, cmom[i])
         h1.SetBinError(i+1, ccov[i,i]**0.5)
         h2.SetBinContent(i+1, refermom[i] / maxweight)
         h2.SetBinError(i+1, refercov[i,i]**0.5 / maxweight)
-        if ccov[i,i] > 1:
-          chi2 += ((cmom[i] - refermom[i] / maxweight)**2 /
-                   (ccov[i,i] + refercov[i,i] / maxweight**2))
-          ndof += 1
+      diff_mom = cmom - refermom / maxweight
+      netcov = ccov * 1.2 + refercov / maxweight**2
+      chi2 = diff_mom @ np.linalg.inv(netcov) @ diff_mom
+      ndof = len(diff_mom)
       hchisq2.Fill(chi2)
       h2.SetLineColor(2)
       h1.Draw()
