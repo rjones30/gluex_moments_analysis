@@ -31,17 +31,17 @@ from concurrent.futures import ThreadPoolExecutor
 def usage():
   print("usage: >>> import buildMomentsMatrix as bmm")
   print("  >>> bmm.open('etapi0_moments_0.root:etapi0_moments')")
-  print("  >>> acc_events = bmm.select_events(massEtaPi0_limits=(1.2,1.5), abst_limits=(0,0.2))")
-  print("  >>> M,Mvar = bmm.buildMomentsMatrix_sequential(acc_events)")
+  print("  >>> acc_events,wgt = bmm.select_events(massEtaPi0_limits=(1.2,1.5), abst_limits=(0,0.2))")
+  print("  >>> M,Mvar = bmm.buildMomentsMatrix(acc_events)")
   print("  >>> bmm.open('etapi0_moments_1.root:etapi0_moments')")
-  print("  >>> acc_events2 = bmm.select_events(massEtaPi0_limits=(1.2,1.5), abst_limits=(0,0.2))")
+  print("  >>> acc_events2,wgt2 = bmm.select_events(massEtaPi0_limits=(1.2,1.5), abst_limits=(0,0.2))")
   print("  >>> M2,Mvar2 = bmm.buildMomentsMatrix_threaded(acc_events2)")
   print("  >>> M += M2")
   print("  >>> Mvar += Mvar2")
   print("  >>> acc_events += acc_events2")
   print("  >>> # more of the above, till all accepted moments trees are read ...")
   print("  >>> bmm.open('generated_moments.root:etapi0_moments')")
-  print("  >>> gen_events=bmm.select_events(massEtaPi0_limits=(1.2,1.5), abst_limits=(0,0.2))")
+  print("  >>> gen_events,wgt = bmm.select_events(massEtaPi0_limits=(1.2,1.5), abst_limits=(0,0.2))")
   print("  >>> outfile = 'save_moments_matrix.h5')")
   print("  >>> bmm.save_output(M, Mvar, acc_events, gen_events, outfile)")
 
@@ -363,25 +363,25 @@ def buildMomentsMatrix(events, mPi0=0, mEta=0, mGJ=0,
    Mvar = np.zeros([mGJ * mEta * mPi0, mGJ_ * mEta_ * mPi0_], dtype=float)
    for iev in events:
       if use_c_extension_library:
-         C_buildMomentsMatrix.add_event(M, 
-           [YmomPi0[iev], YmomEta[iev], YmomGJ[iev]],
-           [YmomPi0_[iev], YmomEta_[iev], YmomGJ_[iev]])
-         C_buildMomentsMatrix.add_event(Mvar,
-           [np.square(YmomPi0[iev]), np.square(YmomEta[iev]), np.square(YmomGJ[iev])],
-           [np.square(YmomPi0_[iev]), np.square(YmomEta_[iev]), np.square(YmomGJ_[iev])])
+         C_buildMomentsMatrix.add_event(M, Mvar,
+           [YmomPi0[iev][:mPi0], YmomEta[iev][:mEta], YmomGJ[iev][:mGJ]],
+           [YmomPi0_[iev][:mPi0_], YmomEta_[iev][:mEta_], YmomGJ_[iev][:mGJ_]])
       else:
          M_GJ = np.array([YmomGJ[iev][iGJ] * YmomGJ_[iev] for iGJ in range(mGJ)], dtype=float)
-         Mvar_GJ = np.array([np.square(YmomGJ[iev])[iGJ] * np.square(YmomGJ_[iev]) for iGJ in range(mGJ)], dtype=float)
+         Mvar_GJ = np.array([YmomGJ_[iev][iGJ] * YmomGJ_[iev] for iGJ in range(mGJ)], dtype=float)
+         Mvar_GJ *= sum(np.square(YmomGJ[iev])) * sum(np.square(YmomPi0[iev])) * sum(np.square(YmomEta[iev]))
          for iPi0 in range(mPi0):
             for iPi0_ in range(mPi0_):
                M_Pi0 = YmomPi0[iev][iPi0] * YmomPi0_[iev][iPi0_]
+               Mvar_Pi0 = YmomPi0_[iev][iPi0] * YmomPi0_[iev][iPi0_]
                for iEta in range(mEta):
                   m = iPi0 * mEta + iEta
                   for iEta_ in range(mEta_):
                      M_Pi0_Eta = M_Pi0 * YmomEta[iev][iEta] * YmomEta_[iev][iEta_]
+                     Mvar_Pi0_Eta = Mvar_Pi0 * YmomEta_[iev][iEta] * YmomEta_[iev][iEta_]
                      m_ = iPi0_ * mEta_ + iEta_
                      M[m * mGJ : (m+1) * mGJ, m_ * mGJ_ : (m_+1) * mGJ_] += M_Pi0_Eta * M_GJ
-                     Mvar[m * mGJ : (m+1) * mGJ, m_ * mGJ_ : (m_+1) * mGJ_] += M_Pi0_Eta**2 * Mvar_GJ
+                     Mvar[m * mGJ : (m+1) * mGJ, m_ * mGJ_ : (m_+1) * mGJ_] += Mvar_Pi0_Eta * Mvar_GJ
    return M, Mvar
 
 def _buildMomentsMatrixSlice1(events, M, Mvar, iPi0, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_,
@@ -397,10 +397,7 @@ def _buildMomentsMatrixSlice1(events, M, Mvar, iPi0, mPi0, mEta, mGJ, mPi0_, mEt
    for iev in events:
       Ymom = [YmomPi0[iev][iPi0:iPi0+1], YmomEta[iev][:mEta], YmomGJ[iev][:mGJ]]
       Ymom_ = [YmomPi0_[iev][:mPi0_], YmomEta_[iev][:mEta_], YmomGJ_[iev][:mGJ_]]
-      Ysqr = [np.square(YmomPi0[iev][iPi0:iPi0+1]), np.square(YmomEta[iev][:mEta]), np.square(YmomGJ[iev][:mGJ])]
-      Ysqr_ = [np.square(YmomPi0_[iev][:mPi0_]), np.square(YmomEta_[iev][:mEta_]), np.square(YmomGJ_[iev][:mGJ_])]
-      C_buildMomentsMatrix.add_event(M_slice, Ymom, Ymom_)
-      C_buildMomentsMatrix.add_event(Mvar_slice, Ysqr, Ysqr_)
+      C_buildMomentsMatrix.add_event(M_slice, Mvar_slice, Ymom, Ymom_)
 
 def _buildMomentsMatrixSlice2(events, M, Mvar, iPi0, iEta, mPi0, mEta, mGJ, mPi0_, mEta_, mGJ_,
                              YmomPi0, YmomPi0_, YmomEta, YmomEta_, YmomGJ, YmomGJ_):
@@ -416,10 +413,7 @@ def _buildMomentsMatrixSlice2(events, M, Mvar, iPi0, iEta, mPi0, mEta, mGJ, mPi0
    for iev in events:
       Ymom = [YmomPi0[iev][iPi0:iPi0+1], YmomEta[iev][iEta:iEta+1], YmomGJ[iev][:mGJ]]
       Ymom_ = [YmomPi0_[iev][:mPi0_], YmomEta_[iev][:mEta_], YmomGJ_[iev][:mGJ_]]
-      Ysqr = [np.square(YmomPi0[iev][iPi0:iPi0+1]), np.square(YmomEta[iev][iEta:iEta+1]), np.square(YmomGJ[iev][:mGJ])]
-      Ysqr_ = [np.square(YmomPi0_[iev][:mPi0_]), np.square(YmomEta_[iev][:mEta_]), np.square(YmomGJ_[iev][:mGJ_])]
-      C_buildMomentsMatrix.add_event(M_slice, Ymom, Ymom_)
-      C_buildMomentsMatrix.add_event(Mvar_slice, Ysqr, Ysqr_)
+      C_buildMomentsMatrix.add_event(M_slice, Mvar_slice, Ymom, Ymom_)
 
 def buildMomentsMatrix_threaded(events, mPi0=0, mEta=0, mGJ=0, threading_split_level=1,
                                 use_generated_angles=1):
