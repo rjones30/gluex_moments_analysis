@@ -7,37 +7,24 @@
 
 #define SQR(X) ((X)*(X))
 
-void buildMomentsMatrix(double *M, double *Mvar, int m[3], int n[3],
+void buildMomentsMatrix(double *M, int m[3], int n[3],
                     double *Ym[3], double *Yn[3])
 {
   int im[3], in[3];
   int ndim = n[0] * n[1] * n[2];
-  double YdotY = 1;
-  int i;
-  for (i=0; i < 3; i++) {
-    double YdotYi = 0;
-    for (im[i]=0; im[i] < m[i]; ++im[i]) {
-      YdotYi += SQR(Ym[i][im[i]]);
-    }
-    YdotY *= YdotYi;
-  }
   for (im[0]=0; im[0] < m[0]; ++im[0]) {
     for (in[0]=0; in[0] < n[0]; ++in[0]) {
       double Y00 = Ym[0][im[0]] * Yn[0][in[0]];
-      double Yvar00 = YdotY * Yn[0][im[0]] * Yn[0][in[0]];
       for (im[1]=0; im[1] < m[1]; ++im[1]) {
         for (in[1]=0; in[1] < n[1]; ++in[1]) {
           double Y0011 = Y00 * Ym[1][im[1]] * Yn[1][in[1]];
-          double Yvar0011 = Yvar00 * Yn[1][im[1]] * Yn[1][in[1]];
           int mm = (im[0] * m[1] + im[1]) * m[2];
           for (im[2]=0; im[2] < m[2]; ++im[2], ++mm) {
             double Y00112 = Y0011 * Ym[2][im[2]];
-            double Yvar00112 = Yvar0011 * Yn[2][im[2]];
             int nn = (in[0] * n[1] + in[1]) * n[2];
             int mn = mm * ndim + nn;
             for (in[2]=0; in[2] < n[2]; ++in[2], ++mn) {
               M[mn] += Y00112 * Yn[2][in[2]];
-              Mvar[mn] += Yvar00112 * Yn[2][in[2]];
             }
           }
         }
@@ -561,17 +548,15 @@ int  not_int2Darray(PyArrayObject *mat)  {
 }
 
 /* ==== Add one event to the M moments matrix ================================== */
-/*   eg. add_event(M, Mvar, [YmomGJ, YmomEta, YmomPi0], [YmomGJ_, YmomEta_, YmomPi0_]) */
+/*   eg. add_event(M, [YmomGJ, YmomEta, YmomPi0], [YmomGJ_, YmomEta_, YmomPi0_]) */
 PyObject *add_event(PyObject *self, PyObject *args) {
     PyArrayObject *M;
-    PyArrayObject *Mvar;
     PyObject *Ymom, *Ymom_;
     double *Ym[3], *Yn[3];
     int m[3], n[3], i;
-    double *Mad, *Mvarad;
+    double *Mad;
 
-    if (!PyArg_ParseTuple(args, "O!O!O!O!", &PyArray_Type, &M, 
-                                            &PyArray_Type, &Mvar,
+    if (!PyArg_ParseTuple(args, "O!O!O!", &PyArray_Type, &M, 
                                             &PyList_Type, &Ymom,
                                             &PyList_Type, &Ymom_))
        return NULL;
@@ -589,10 +574,9 @@ PyObject *add_event(PyObject *self, PyObject *args) {
         Yn[i] = PyArray_DATA((PyArrayObject*)PyList_GetItem(Ymom_, i));
     }
     Mad = PyArray_DATA(M);
-    Mvarad = PyArray_DATA(Mvar);
 
     Py_BEGIN_ALLOW_THREADS
-    buildMomentsMatrix(Mad, Mvarad, m, n, Ym, Yn);
+    buildMomentsMatrix(Mad, m, n, Ym, Yn);
     Py_END_ALLOW_THREADS
 
     return Py_BuildValue("i", 0);

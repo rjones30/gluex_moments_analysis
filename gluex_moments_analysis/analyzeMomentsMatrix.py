@@ -44,16 +44,14 @@ h2dsupport = {}
 
 def open(h5input):
   """
-  Recover M matrix and its covariance matrix saved in file pathname
-  h5input, probably from a prior run of buildMomentsMatrix.save().
+  Recover the M matrix saved in file pathname h5input,
+  probably from a prior run of buildMomentsMatrix.save().
   Return value is the h5py.File object connected to h5input.
   """
   global f5
   global M
-  global Mvar
   f5 = h5py.File(h5input, 'r')
   M = f5['Moments']
-  Mvar = f5['Moments_variance']
   h5inputs[0] = f5
   return f5
 
@@ -80,27 +78,16 @@ def histogram_M_diagonal(h5input=0):
   normfact = (4 * math.pi)**3 / MCsample_size
   smallest = [1e9,0]
   largest = [0,0]
-  smallerr = [1e9,0]
-  largerr = [0,0]
   for m in range(mdim):
     hMdiag.SetBinContent(m+1, M[m,m] * normfact)
-    hMdiag.SetBinError(m+1, Mvar[m,m]**0.5 * normfact)
     if M[m,m] < smallest[0]:
-      smallest = [M[m,m], Mvar[m,m]]
+      smallest = M[m,m]
     elif M[m,m] > largest[0]:
-      largest = [M[m,m], Mvar[m,m]]
-    if Mvar[m,m]**0.5 / M[m,m] > largerr[0]:
-      largerr = [Mvar[m,m]**0.5 / M[m,m], 0]
-    elif Mvar[m,m]**0.5 / M[m,m] < smallerr[0]:
-      smallerr = [Mvar[m,m]**0.5 / M[m,m], 0]
+      largest = M[m,m]
   print("smallest diagonal element is ", end='')
-  print(smallest[0] * normfact, "+/-", smallest[1]**0.5 * normfact, end='')
+  print(smallest[0] * normfact, end='')
   print(", largest is ", end='')
-  print(largest[0] * normfact, "+/-", largest[1]**0.5 * normfact)
-  print("smallest fractional error is ", end='')
-  print(smallerr[0], "+/-", smallerr[1], end='')
-  print(", largest is ", end='')
-  print(largerr[0], "+/-", largerr[1])
+  print(largest[0] * normfact)
   return hMdiag
 
 def histogram_M_diagonal_GJ0(h5input=0):
@@ -126,7 +113,6 @@ def histogram_M_diagonal_GJ0(h5input=0):
   for m in range(mdim):
     if (m % 49) == 0:
       hMdiag.SetBinContent(int(m/49)+1, M[m,m] * normfact)
-      hMdiag.SetBinError(int(m/49)+1, Mvar[m,m]**0.5 * normfact)
   return hMdiag
 
 def histogram_M_diagonal_GJ0_Eta0(h5input=0):
@@ -152,7 +138,6 @@ def histogram_M_diagonal_GJ0_Eta0(h5input=0):
   for m in range(mdim):
     if (m % 1372) == 0:
       hMdiag.SetBinContent(int(m/1372)+1, M[m,m] * normfact)
-      hMdiag.SetBinError(int(m/1372)+1, Mvar[m,m]**0.5 * normfact)
   return hMdiag
 
 def histogram_M_offdiagonal(h5input=0):
@@ -174,38 +159,26 @@ def histogram_M_offdiagonal(h5input=0):
       print("unable to open input moments file", h5input)
       return 0
   Marray = np.asarray(M)
-  Mvararray = np.asarray(Mvar)
   mdim = M.shape[0]
   nthreads = 10
   hMabove = []
   hMbelow = []
-  hEabove = []
-  hEbelow = []
   for i in range(nthreads):
     hMabovediag = ROOT.TH1D(f"hMabovediag{i}", "M above-diagonal elements normalized to diagonal", 200,-0.1, 0.1)
     hMbelowdiag = ROOT.TH1D(f"hMbelowdiag{i}", "M below-diagonal elements normalized to diagonal", 200,-0.1, 0.1)
-    hEabovediag = ROOT.TH1D(f"hEabovediag{i}", "M above-diagonal error normalized to diagonal", 200,-0.1, 0.1)
-    hEbelowdiag = ROOT.TH1D(f"hEbelowdiag{i}", "M below-diagonal error normalized to diagonal", 200,-0.1, 0.1)
     hMabovediag.GetXaxis().SetTitle("normalized M matrix element")
     hMabovediag.GetYaxis().SetTitle("moments")
     hMbelowdiag.GetXaxis().SetTitle("normalized M matrix element")
     hMbelowdiag.GetYaxis().SetTitle("moments")
-    hEabovediag.GetXaxis().SetTitle("normalized M matrix element error")
-    hEabovediag.GetYaxis().SetTitle("moments")
-    hEbelowdiag.GetXaxis().SetTitle("normalized M matrix element error")
-    hEbelowdiag.GetYaxis().SetTitle("moments")
     hMabove.append(hMabovediag)
     hMbelow.append(hMbelowdiag)
-    hEabove.append(hEabovediag)
-    hEbelow.append(hEbelowdiag)
-  ROOT.gROOT.ProcessLine(".L fill_M_histograms.C+O")
+  #Execute this line once at module load time
+  #ROOT.gROOT.ProcessLine(".L fill_M_histograms.C+O")
   ROOT.fill_M_histograms.__release_gil__ = False
   ithread = 0
   threads = []
   for m in range(mdim):
-    args = (Marray, Mvararray, m, mdim,
-            hMabove[ithread], hMbelow[ithread], 
-            hEabove[ithread], hEbelow[ithread])
+    args = (Marray, m, mdim, hMabove[ithread], hMbelow[ithread])
     t = threading.Thread(target=ROOT.fill_M_histograms, args=args)
     if ithread < len(threads):
       ierr = threads[ithread].join()
@@ -217,42 +190,29 @@ def histogram_M_offdiagonal(h5input=0):
     ithread = (ithread + 1) % nthreads
   hMabovediag = hMabove[0]
   hMbelowdiag = hMbelow[0]
-  hEabovediag = hEabove[0]
-  hEbelowdiag = hEbelow[0]
   for i in range(1,nthreads):
     hMabovediag.Add(hMabove[i])
     hMbelowdiag.Add(hMbelow[i])
-    hEabovediag.Add(hEabove[i])
-    hEbelowdiag.Add(hEbelow[i])
-  return (hMabovediag,hMbelowdiag,hEabovediag,hEbelowdiag)
+  return (hMabovediag,hMbelowdiag)
 
-def histogram_offdiagonal(name, M, Mvar):
+def histogram_offdiagonal(name, M):
   """
-  Variant of histogram_M_offdiagonal() where the matrix M and its
-  covariance matrix are supplied as arguments rather than being
-  read from an hdf5 input file.
+  Variant of histogram_M_offdiagonal() where the matrix M is
+  supplied by argument rather than read from an hdf5 input file.
   """
   hMabovediag = ROOT.TH1D(f"hMabovediag{name}", "M above-diagonal elements normalized to diagonal", 10000,-0.1, 0.1)
   hMbelowdiag = ROOT.TH1D(f"hMbelowdiag{name}", "M below-diagonal elements normalized to diagonal", 10000,-0.1, 0.1)
-  hEabovediag = ROOT.TH1D(f"hEabovediag{name}", "M above-diagonal errors normalized to diagonal", 10000,-0.1, 0.1)
-  hEbelowdiag = ROOT.TH1D(f"hEbelowdiag{name}", "M below-diagonal errors normalized to diagonal", 10000,-0.1, 0.1)
   hMabovediag.GetXaxis().SetTitle("normalized M matrix element")
   hMabovediag.GetYaxis().SetTitle("moments")
   hMbelowdiag.GetXaxis().SetTitle("normalized M matrix element")
   hMbelowdiag.GetYaxis().SetTitle("moments")
-  hEabovediag.GetXaxis().SetTitle("normalized M matrix errors")
-  hEabovediag.GetYaxis().SetTitle("moments")
-  hEbelowdiag.GetXaxis().SetTitle("normalized M matrix errors")
-  hEbelowdiag.GetYaxis().SetTitle("moments")
   mdim = M.shape[0]
   for i in range(mdim):
     for j in range(i):
       hMbelowdiag.Fill(M[i,j] / (M[i,i] * M[j,j])**0.5)
-      hEbelowdiag.Fill((Mvar[i,j] / (M[i,i] * M[j,j]))**0.5)
     for j in range(i+1,mdim):
       hMabovediag.Fill(M[i,j] / (M[i,i] * M[j,j])**0.5)
-      hEabovediag.Fill((Mvar[i,j] / (M[i,i] * M[j,j]))**0.5)
-  return (hMabovediag, hMbelowdiag, hEabovediag, hEbelowdiag)
+  return (hMabovediag, hMbelowdiag)
 
 def histogram_eigenvalues(name, title, w, normfactor=1):
   """
@@ -274,8 +234,7 @@ def histogram_moments(name, title, moments, errors):
   Convenience function to form a histogram of vector moments, treated
   as an ordered list of angular moments of a sample, with statistical
   uncertainty provided in the errors aregument. Return value is a
-  new TH1D object with name,title given in the arguments. Optional
-  argument normfactor is multiplied by w when it is histogrammed.
+  new TH1D object with name,title given in the arguments.
   """
   ndim = len(moments)
   h = ROOT.TH1D(name, title, ndim, 0, ndim)
@@ -376,7 +335,7 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
     f5 = h5py.File("Msample.h5")
     samplemom = f5['sample_moment'][:]
     refermom = f5['reference_moment'][:]
-    samplecov = f5['sample_covvariance'][:]
+    samplecov = f5['sample_covariance'][:]
     refercov = f5['reference_covariance'][:]
     mock_events = f5['sample_events'][:]
     gen_events = f5['generated_events'][:]
@@ -454,7 +413,6 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
   try:
     f5 = h5py.File("Msaved.h5")
     M = f5['Moments'][:]
-    Mvar = f5['Moments_variance'][:]
     Nacc = f5['accepted_subset'][()]
     Ngen = f5['generated_subset'][()]
   except:
@@ -469,15 +427,13 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
       bmm.open(f"../etapi0_moments_x10_{i}.root:etapi0_moments")
       events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
                                          abst_limits=abst_limits)
-      M_,Mvar_ = bmm.buildMomentsMatrix_threaded(events, mPi0=1, mEta=1,
+      M_ = bmm.buildMomentsMatrix_threaded(events, mPi0=1, mEta=1,
                      use_generated_angles=use_generated_angles_for_acceptance)
       acc_events += events
       try:
         M += M_
-        Mvar += Mvar_
       except:
         M = M_
-        Mvar = Mvar_
       tstop2 = time.perf_counter()
       print(f"  time to compute M matrix: {tstop2-tstart2:.3f}s")
 
@@ -486,15 +442,13 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
       bmm.open(f"../generated_moments_x10_{i}.root:etapi0_moments")
       events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
                                          abst_limits=abst_limits)
-      M_,Mvar_ = bmm.buildMomentsMatrix_threaded(events, mPi0=1, mEta=1,
+      M_ = bmm.buildMomentsMatrix_threaded(events, mPi0=1, mEta=1,
                      use_generated_angles=use_generated_angles_for_acceptance)
       try:
         Mgen += M_
-        Mgenvar += Mvar_
       except:
         Mgen = M_
-        Mgenvar = Mvar_
-    bmm.save_output(Mgen, Mgenvar, gen_events, gen_events, "Mperfect.h5")
+    bmm.save_output(Mgen, gen_events, gen_events, "Mperfect.h5")
       """
 
     w,v = np.linalg.eigh(M)
@@ -526,7 +480,7 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
       tstop3 = time.perf_counter()
       print(f"  time to histogram generated kinematics: {tstop3-tstep3a:.3f}s")
 
-    bmm.save_output(M, Mvar, acc_events, gen_events, "Msaved.h5")
+    bmm.save_output(M, acc_events, gen_events, "Msaved.h5")
     Nacc = len(acc_events)
     Ngen = len(gen_events)
     f = ROOT.TFile("Msaved.root", "recreate")
@@ -535,7 +489,6 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
     f.Close()
 
   M *= (4 * math.pi)**3 / Ngen
-  Mvar *= ((4 * math.pi)**3 / Ngen)**2
 
   if Mmatrix != "Msaved.h5":
     f5 = h5py.File(Mmatrix)
@@ -787,6 +740,7 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
       Ngen = f5saved['generated_subset'][()]
       M *= (4 * math.pi)**3 / Ngen
       Minv = np.linalg.inv(M)
+      Minv2 = Minv @ Minv
       f5sample = h5py.File(datadir + "/Msample.h5")
       samplemom = f5sample['sample_moment'][:]
       samplecov = f5sample['sample_covariance'][:]
@@ -814,7 +768,7 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
         h2.SetBinContent(i+1, refermom[i] / maxweight)
         h2.SetBinError(i+1, refercov[i,i]**0.5 / maxweight)
       diff_mom = cmom - refermom / maxweight
-      netcov = ccov * 1.2 + refercov / maxweight**2
+      netcov = ccov + refercov / maxweight**2
       chi2 = diff_mom @ np.linalg.inv(netcov) @ diff_mom
       ndof = len(diff_mom)
       hchisq2.Fill(chi2)
@@ -940,3 +894,6 @@ def histogram_moments_correlations(support_moments=0):
     for i in range(Nmoments):
       hcorr[name].SetBinContent(i+1, covinv[i,i] * cov[i,i])
   return hcorr
+
+srcdir = "/".join(__file__.split('/')[:-1]) + "/src"
+ROOT.gROOT.ProcessLine(f".L {srcdir}/fill_M_histograms.C+O")
