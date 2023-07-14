@@ -23,7 +23,6 @@ import numpy as np
 import awkward as ak
 import C_buildMomentsMatrix
 import threading
-import h5py
 import sys
 
 from concurrent.futures import ThreadPoolExecutor
@@ -41,8 +40,6 @@ def usage():
   print("  >>> # more of the above, till all accepted moments trees are read ...")
   print("  >>> bmm.open('generated_moments.root:etapi0_moments')")
   print("  >>> gen_events,wgt = bmm.select_events(massEtaPi0_limits=(1.2,1.5), abst_limits=(0,0.2))")
-  print("  >>> outfile = 'save_moments_matrix.h5')")
-  print("  >>> bmm.save_output(M, acc_events, gen_events, outfile)")
 
 upcache = {}
 mPi0,mPi0 = 0,0
@@ -469,16 +466,3 @@ def buildMomentsMatrix_threaded(events, mPi0=0, mEta=0, mGJ=0, threading_split_l
       t.join()
    print("threads joined")
    return M
-
-def save_output(M, acc_events, gen_events, outfile):
-   """
-   Save results from buildMomentsMatrix() together with some properties
-   of the dataset used to compute M which might be useful later on.
-   """
-   h5out = h5py.File(outfile, 'w')
-   h5out.create_dataset("Moments", data=M)
-   h5out.create_dataset("accepted_subset", data=len(acc_events))
-   h5out.create_dataset("generated_subset", data=len(gen_events))
-   h5out.create_dataset("accepted_start", data=acc_events[0])
-   h5out.create_dataset("generated_start", data=gen_events[0])
-   h5out.close()

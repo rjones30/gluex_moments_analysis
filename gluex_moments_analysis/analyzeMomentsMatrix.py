@@ -17,7 +17,9 @@ import time
 
 import gluex_moments_analysis.buildMomentsMatrix as bmm
 
+intreedir = ".."
 workdir = "../trial1"
+savedir = "."
 
 def usage():
   print("usage: >>> import analyzeMomentsMatrix.py as ana")
@@ -356,7 +358,7 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
                                       kinbins, kinbounds)
     for i in sample_subset:
       tstart1 = time.perf_counter()
-      bmm.open(f"../generated_moments_x10_{i}.root:etapi0_moments")
+      bmm.open(f"{intreedir}/generated_moments_x10_{i}.root:etapi0_moments")
       events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
                                          abst_limits=abst_limits, model=1)
       gen_events += events
@@ -375,7 +377,7 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
       bmm.histogram_moments(events, h2dmodel, mPi0=1, mEta=1, weights=weights)
       tstep1c = time.perf_counter()
       print(f"  histogram generated moments: {tstep1c-tstep1b:.3f}s")
-      bmm.open(f"../etapi0_moments_x10_{i}.root:etapi0_moments")
+      bmm.open(f"{intreedir}/etapi0_moments_x10_{i}.root:etapi0_moments")
       events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
                                          abst_limits=abst_limits, model=1,
                        use_generated_angles=use_generated_angles_for_sampling,
@@ -396,7 +398,7 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
       tstop1 = time.perf_counter()
       print(f"  histogram mock data moments: {tstop1-tstep1e:.3f}s")
       print(f" *total sample creation time: {tstop1-tstart1:.3f}s")
-    f5 = h5py.File("Msample.h5", "w")
+    f5 = h5py.File(f"{savedir}/Msample.h5", "w")
     f5.create_dataset("sample_moment", data=samplemom)
     f5.create_dataset("reference_moment", data=refermom)
     f5.create_dataset("sample_covariance", data=samplecov)
@@ -405,7 +407,7 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
     f5.create_dataset("generated_events", data=gen_events)
     f5.create_dataset("sample_maxweight", data=maxweight)
     f5.close()
-    f = ROOT.TFile("Msample.root", "recreate")
+    f = ROOT.TFile(f"{savedir}/Msample.root", "recreate")
     [h.Write() for h in h2dmodel]
     [h.Write() for h in h2dsample]
     f.Close()
@@ -421,14 +423,17 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
     except:
       pass
     print("hinhout regenerating Msaved.h5")
+    f5 = h5py.File("Msaved.h5", 'w')
     acc_events = []
     for i in acceptance_subset:
       tstart2 = time.perf_counter()
-      bmm.open(f"../etapi0_moments_x10_{i}.root:etapi0_moments")
+      bmm.open(f"{intreedir}/etapi0_moments_x10_{i}.root:etapi0_moments")
       events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
                                          abst_limits=abst_limits)
+      f5.create_dataset(f"accepted_subset[{i}]", data=len(events))
       M_ = bmm.buildMomentsMatrix_threaded(events, mPi0=1, mEta=1,
                      use_generated_angles=use_generated_angles_for_acceptance)
+      f5.create_dataset(f"Moments[{i}]", data=M_)
       acc_events += events
       try:
         M += M_
@@ -439,16 +444,17 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
 
       # disable this, unless you need to check the orthonormality of the moments
       """
-      bmm.open(f"../generated_moments_x10_{i}.root:etapi0_moments")
+      bmm.open(f"{intreedir}/generated_moments_x10_{i}.root:etapi0_moments")
       events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
                                          abst_limits=abst_limits)
+      f5.create_dataset(f"generated_subset[{i}]", data=len(events))
       M_ = bmm.buildMomentsMatrix_threaded(events, mPi0=1, mEta=1,
                      use_generated_angles=use_generated_angles_for_acceptance)
+      f5.create_dataset(f"Mgenerated[{i}]", data=M_)
       try:
         Mgen += M_
       except:
         Mgen = M_
-    bmm.save_output(Mgen, gen_events, gen_events, "Mperfect.h5")
       """
 
     w,v = np.linalg.eigh(M)
@@ -465,25 +471,31 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
     gen_events = []
     for i in acceptance_subset:
       tstart3 = time.perf_counter()
-      bmm.open(f"../etapi0_moments_x10_{i}.root:etapi0_moments")
+      bmm.open(f"{intreedir}/etapi0_moments_x10_{i}.root:etapi0_moments")
       events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
                                          abst_limits=abst_limits)
       bmm.histogram_acceptance(events, h2daccepted, mPi0=1, mEta=1, svectors=v,
                     use_generated_angles=use_generated_angles_for_acceptance)
       tstep3a = time.perf_counter()
       print(f"  time to histogram acceptance moments: {tstep3a-tstart3:.3f}s")
-      bmm.open(f"../generated_moments_x10_{i}.root:etapi0_moments")
+      bmm.open(f"{intreedir}/generated_moments_x10_{i}.root:etapi0_moments")
       events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
                                          abst_limits=abst_limits)
+      f5.create_dataset(f"generated_subset[{i}]", data=len(events))
       gen_events += events
       bmm.histogram_acceptance(events, h2dgenerated, mPi0=1, mEta=1, mGJ=1)
       tstop3 = time.perf_counter()
       print(f"  time to histogram generated kinematics: {tstop3-tstep3a:.3f}s")
 
-    bmm.save_output(M, acc_events, gen_events, "Msaved.h5")
+    f5 = h5py.File(outfile, 'w')
+    f5.create_dataset("Moments", data=M)
+    f5.create_dataset("accepted_subset", data=len(acc_events))
+    f5.create_dataset("generated_subset", data=len(gen_events))
+    f5.close()
+
     Nacc = len(acc_events)
     Ngen = len(gen_events)
-    f = ROOT.TFile("Msaved.root", "recreate")
+    f = ROOT.TFile(f"{savedir}/Msaved.root", "recreate")
     [h.Write() for h in h2daccepted]
     [h.Write() for h in h2dgenerated]
     f.Close()
