@@ -487,7 +487,6 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
       tstop3 = time.perf_counter()
       print(f"  time to histogram generated kinematics: {tstop3-tstep3a:.3f}s")
 
-    f5 = h5py.File(outfile, 'w')
     f5.create_dataset("Moments", data=M)
     f5.create_dataset("accepted_subset", data=len(acc_events))
     f5.create_dataset("generated_subset", data=len(gen_events))
