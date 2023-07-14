@@ -45,7 +45,6 @@ function build_moments {
     rm -rf $workdir || clean_exit "unable to clear space for workdir $workdir"
     if [ ! -d $workdir ]; then
         mkdir -p $workdir || clean_exit "unable to create workdir $workdir"
-        cp src/C_buildMomentsMatrix* $workdir || clean_exit "unable to populate workdir $workdir"
     fi
     cd $workdir || clean_exit "unable to descend into workdir $workdir"
     cat >rebuild.py <<EOI
