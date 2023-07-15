@@ -730,16 +730,27 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
     hchisq = ROOT.TH1D("hchisq", title, 100, 0, 200)
     hchisq.GetXaxis().SetTitle("#chi^{2}")
     hchisq.GetYaxis().SetTitle("moments")
+    hchisq.SetDirectory(0)
   if hchisq2 == 0:
     title = "#chi^{2} distribution for constrained moments"
     hchisq2 = ROOT.TH1D("hchisq2", title, 100, 0, 500)
     hchisq2.GetXaxis().SetTitle("#chi^{2}")
     hchisq2.GetYaxis().SetTitle("kinematic bins")
+    hchisq2.SetDirectory(0)
   hsample = [0] * 169
   hcorrect = [0] * 169
   hmodel1 = [0] * 169
   prompt = interactive
+  itbin,tlimits = (0,(0,0))
   for tbin,mbin in standard_kinematic_bins(finebins):
+    if tbin != tlimits:
+      tlimits = tbin
+      itbin += 1
+      if itbin == tcut:
+        break
+  for tbin,mbin in standard_kinematic_bins(finebins):
+    if tcut != 0 and tbin != tlimits:
+      continue
     hs,hc,hm,hg = model1_corrected_moments(range(169), kinbins=[(tbin,mbin)])
     if len(constraints) > 0:
       datadir = f"{workdir}/etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
@@ -769,7 +780,7 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
       refercov = f5sample['reference_covariance'][:]
       correctmom = Minv @ samplemom
       correctcov = Minv @ samplecov @ np.transpose(Minv)
-      if False:
+      if max(constraints) > min(constraints):
         cmom,ccov,chc = apply_constraints(constraints, correctmom, correctcov, hc)
       else:
         cmom,ccov,chc = (correctmom, correctcov, 0)
@@ -819,17 +830,11 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
     else:
       h = hsample[m]
     px1 = h.GetName() + "_px"
-    if tcut == 0:
-      h1 = h.ProjectionX(px1)
-    else:
-      h1 = h.ProjectionX(px1, tcut, tcut)
+    h1 = h.ProjectionX(px1)
     h1.Scale(scale)
     h1.Rebin(2)
     px2 = hmodel1[m].GetName() + "_px"
-    if tcut == 0:
-      h2 = hmodel1[m].ProjectionX(px2)
-    else:
-      h2 = hmodel1[m].ProjectionX(px2, tcut, tcut)
+    h2 = hmodel1[m].ProjectionX(px2)
     h2.SetLineColor(2)
     h2.Rebin(2)
     hmax = 0
