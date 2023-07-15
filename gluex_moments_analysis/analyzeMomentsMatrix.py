@@ -780,7 +780,7 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
       refercov = f5sample['reference_covariance'][:]
       correctmom = Minv @ samplemom
       correctcov = Minv @ samplecov @ np.transpose(Minv)
-      if max(constraints) > min(constraints):
+      if np.max(constraints) > np.min(constraints):
         cmom,ccov,chc = apply_constraints(constraints, correctmom, correctcov, hc)
       else:
         cmom,ccov,chc = (correctmom, correctcov, 0)
