@@ -457,9 +457,7 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
         Mgen = M_
       """
 
-    w,v = np.linalg.eigh(M)
-    w = np.flip(w,0)
-    v = np.flip(v,1)
+    W,E,Vt = np.linalg.svd(M)
 
     h2daccepted = histograms_of_moments(169, "accept_{0}",
                                         "acceptance for support vector {0}", 
@@ -474,7 +472,7 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
       bmm.open(f"{intreedir}/etapi0_moments_x10_{i}.root:etapi0_moments")
       events,weights = bmm.select_events(massEtaPi0_limits=massEtaPi0_limits,
                                          abst_limits=abst_limits)
-      bmm.histogram_acceptance(events, h2daccepted, mPi0=1, mEta=1, svectors=v,
+      bmm.histogram_acceptance(events, h2daccepted, mPi0=1, mEta=1, svectors=W,
                     use_generated_angles=use_generated_angles_for_acceptance)
       tstep3a = time.perf_counter()
       print(f"  time to histogram acceptance moments: {tstep3a-tstart3:.3f}s")
@@ -506,9 +504,7 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
     Mregion = f5['Moments']
   else:
     Mregion = M
-  w,v = np.linalg.eigh(Mregion)
-  w = np.flip(w,0)
-  v = np.flip(v,1)
+  W,E,Vt = np.linalg.svd(Mregion)
 
   Minv = np.linalg.inv(M)
   correctmom = Minv @ samplemom
@@ -516,12 +512,12 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
 
   # transform from spherical basis to support vector moments
   if False:
-    samplemom = np.transpose(v) @ samplemom
-    samplecov = np.transpose(v) @ samplecov @ v
-    correctmom = np.transpose(v) @ correctmom
-    correctcov = np.transpose(v) @ correctcov @ v
-    refermom = np.transpose(v) @ refermom
-    refercov = np.transpose(v) @ refercov @ v
+    samplemom = np.transpose(W) @ samplemom
+    samplecov = np.transpose(W) @ samplecov @ W
+    correctmom = np.transpose(W) @ correctmom
+    correctcov = np.transpose(W) @ correctcov @ W
+    refermom = Vt @ refermom @ np.transpose(Vt)
+    refercov = Vt @ refercov @ np.transpose(Vt)
 
   Nmom = len(samplemom)
   hsamp = ROOT.TH1D("hsamp", "sample moments, uncorrected", Nmom, 0, Nmom)
@@ -614,8 +610,7 @@ def model1_corrected_moments(imoments=range(169), kinbins=[], finebins=0):
     Ngen = f5saved['generated_subset'][()]
     M = f5saved['Moments'][:]
     M *= (4 * math.pi)**3 / Ngen
-    w,v = np.linalg.eigh(M)
-    v = np.flip(v,1)
+    W,E,Vt = np.linalg.svd(M)
     Minv = np.linalg.inv(M)
     Nmoments = M.shape[0]
     fsaved = ROOT.TFile(datadir + "/Msaved.root")
@@ -644,7 +639,7 @@ def model1_corrected_moments(imoments=range(169), kinbins=[], finebins=0):
       for k in range(Nmoments):
         svk = f"{svector}_s{k}"
         for j in range(Nmoments):
-          h2dsupport[svk].Add(h2dsample[j], v[j,k])
+          h2dsupport[svk].Add(h2dsample[j], W[j,k])
         h2daccept = fsaved.Get(f"accept_{k}")
         h2daccept.Divide(h2dgenerated)
         h2dsupport[svk].Divide(h2daccept)
@@ -660,7 +655,7 @@ def model1_corrected_moments(imoments=range(169), kinbins=[], finebins=0):
           h2dcorrect.Add(h2dsample[k], Minv[imoment,k])
         else:
           svk = f"{svector}_s{k}"
-          h2dcorrect.Add(h2dsupport[svk], v[imoment,k])
+          h2dcorrect.Add(h2dsupport[svk], Vt[k,imoment])
       try:
         hmodel1[imoment].Add(h2dmodel1)
         hsample[imoment].Add(h2dsample[imoment], maxweight)
@@ -913,8 +908,8 @@ def histogram_moments_correlations(support_moments=0):
     if support_moments:
       f5saved = h5py.File(datadir + "/Msaved.h5")
       M = f5saved['Moments'][:]
-      w,v = np.linalg.eigh(M)
-      cov = np.transpose(v) @ cov @ v
+      W,E,Vt = np.linalg.svd(M)
+      cov = np.transpose(W) @ cov @ W
     covinv = np.linalg.inv(cov)
     for i in range(Nmoments):
       hcorr[name].SetBinContent(i+1, covinv[i,i] * cov[i,i])
