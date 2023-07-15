@@ -625,9 +625,9 @@ def model1_corrected_moments(imoments=range(169), kinbins=[], finebins=0):
     fsample = ROOT.TFile(datadir + "/Msample.root")
     h2dsample = [fsample.Get(f"sample_{k}") for k in range(Nmoments)]
     svector = f"sample_{mbin}_{tbin}"
+    support_rootfile = datadir + "/Msupport.root"
     try:
-      support_rootfile = f"Msupport{acceptance_subset}.root"
-      fsupport = ROOT.TFile(datadir + f"/{support_rootfile}")
+      fsupport = ROOT.TFile(support_rootfile)
       for k in range(Nmoments):
         svk = f"{svector}_s{k}"
         h2dsupport[svk] = fsupport.Get(svk)
@@ -635,7 +635,7 @@ def model1_corrected_moments(imoments=range(169), kinbins=[], finebins=0):
       fsupport.Close()
     except:
       print("building support vectors for", svector)
-      fsupport = ROOT.TFile(datadir + f"/{support_rootfile}", "recreate")
+      fsupport = ROOT.TFile(support_rootfile, "recreate")
       for k in range(Nmoments):
         svk = f"{svector}_s{k}"
         h2dsupport[svk] = h2dsample[k].Clone(svk)
@@ -750,15 +750,17 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
       datadir = f"{workdir}/etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
       f5saved = h5py.File(datadir + "/Msaved.h5")
       if len(acceptance_subset) > 0:
+        M = 0
+        Ngen = 0
         for i in acceptance_subset:
           M_ = f5saved[f"Moments[{i}]"][:]
           Ngen_ = f5saved[f"generated_subset[{i}]"][()]
-        try:
-          M += M_
-          Ngen += Ngen_
-        except:
-          M = M_
-          Ngen = Ngen_
+          try:
+            M += M_
+            Ngen += Ngen_
+          except:
+            M = M_
+            Ngen = Ngen_
       else:
         M = f5saved["Moments"][:]
         Ngen = f5saved['generated_subset'][()]
