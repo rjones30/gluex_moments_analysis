@@ -716,7 +716,7 @@ def apply_constraints(S, moments, covariance, histograms=[]):
   return h, CC, histograms_cons
 
 def scan_em(corrected=1, scale=1, tcut=0, finebins=0, 
-            hchisq=0, constraints=[], hchisq2=0,
+            hchisq=0, constraints=[], hchisq2=0, maxmoments=0,
             acceptance_subset=[], interactive=True):
   """
   Cycle through the kinematic bins and perform a systematic comparison
@@ -724,6 +724,18 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
   trial model. The distribution of chisquare values from a projection
   of each of the moments onto the mX axis for a given slice through |t|
   is returned.
+
+  This method has been tweaked repeatedly to add the capability of studying
+  systematic errors from a number of sources. These features are enabled by
+  calling with a non-empty constraints array, even if all of the elements
+  are zero (implies no constraints). In each case, the results are returned
+  as a second chisquare histogram in the second element of the return value.
+    1) acceptance_subset - select a subset of the MC event sample that was
+            passed to analyze_moments in a prior call. This provides a hook
+            for study of systematic error from a finite acceptance sample.
+    2) maxmoments [=Q] - if non-zero, truncate the M matrix to QxQ before its
+            inversion, and extract only Q moments from the sample. It must
+            not be set to a value greater than 169.
   """
   if hchisq == 0:
     title = "#chi^{2} distribution for corrected-model moments, 95 dof"
@@ -737,9 +749,11 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
     hchisq2.GetXaxis().SetTitle("#chi^{2}")
     hchisq2.GetYaxis().SetTitle("kinematic bins")
     hchisq2.SetDirectory(0)
-  hsample = [0] * 169
-  hcorrect = [0] * 169
-  hmodel1 = [0] * 169
+  if maxmoments == 0:
+    maxmoments = 169
+  hsample = [0] * maxmoments
+  hcorrect = [0] * maxmoments
+  hmodel1 = [0] * maxmoments
   prompt = interactive
   itbin,tlimits = (0,(0,0))
   for tbin,mbin in standard_kinematic_bins(finebins):
@@ -751,7 +765,8 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
   for tbin,mbin in standard_kinematic_bins(finebins):
     if tcut != 0 and tbin != tlimits:
       continue
-    hs,hc,hm,hg = model1_corrected_moments(range(169), kinbins=[(tbin,mbin)])
+    hs,hc,hm,hg = model1_corrected_moments(range(maxmoments),
+                                           kinbins=[(tbin,mbin)])
     if len(constraints) > 0:
       datadir = f"{workdir}/etapi0_moments_{mbin[0]},{mbin[1]}_{tbin[0]},{tbin[1]}"
       f5saved = h5py.File(datadir + "/Msaved.h5")
@@ -759,7 +774,7 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
         M = 0
         Ngen = 0
         for i in acceptance_subset:
-          M_ = f5saved[f"Moments[{i}]"][:]
+          M_ = f5saved[f"Moments[{i}]"][:maxmoments,:maxmoments]
           Ngen_ = f5saved[f"generated_subset[{i}]"][()]
           try:
             M += M_
@@ -768,16 +783,16 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
             M = M_
             Ngen = Ngen_
       else:
-        M = f5saved["Moments"][:]
+        M = f5saved["Moments"][:maxmoments,:maxmoments]
         Ngen = f5saved['generated_subset'][()]
       M *= (4 * math.pi)**3 / Ngen
       Minv = np.linalg.inv(M)
       f5sample = h5py.File(datadir + "/Msample.h5")
-      samplemom = f5sample['sample_moment'][:]
-      samplecov = f5sample['sample_covariance'][:]
+      samplemom = f5sample['sample_moment'][:maxmoments]
+      samplecov = f5sample['sample_covariance'][:maxmoments,:maxmoments]
       maxweight = f5sample['sample_maxweight'][()] 
-      refermom = f5sample['reference_moment'][:]
-      refercov = f5sample['reference_covariance'][:]
+      refermom = f5sample['reference_moment'][:maxmoments]
+      refercov = f5sample['reference_covariance'][:maxmoments,:maxmoments]
       correctmom = Minv @ samplemom
       correctcov = Minv @ samplecov @ np.transpose(Minv)
       if np.max(constraints) > np.min(constraints):
@@ -785,15 +800,15 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
       else:
         cmom,ccov,chc = (correctmom, correctcov, 0)
       title = f"moments for |t|={tbin}, m_{{X}}={mbin}"
-      h1 = ROOT.TH1D("h1", "constrained " + title, 169, 0, 169)
+      h1 = ROOT.TH1D("h1", "constrained " + title, maxmoments, 0, maxmoments)
       h1.GetXaxis().SetTitle("moments index")
       h1.GetYaxis().SetTitle("sample moment")
       h1.SetStats(0)
-      h2 = ROOT.TH1D("h2", "model 1 " + title, 169, 0, 169)
+      h2 = ROOT.TH1D("h2", "model 1 " + title, maxmoments, 0, maxmoments)
       h2.GetXaxis().SetTitle("moments index")
       h2.GetYaxis().SetTitle("model moment")
       h2.SetStats(0)
-      for i in range(169):
+      for i in range(maxmoments):
         h1.SetBinContent(i+1, cmom[i])
         h1.SetBinError(i+1, ccov[i,i]**0.5)
         h2.SetBinContent(i+1, refermom[i] / maxweight)
@@ -814,7 +829,7 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
                          "q to quit? ")
           if prompt == 'q':
              return 0,0
-    for m in range(169):
+    for m in range(maxmoments):
       try:
         hsample[m].Add(hs[m])
         hcorrect[m].Add(hc[m])
@@ -824,7 +839,7 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
         hcorrect[m] = hc[m].Clone()
         hmodel1[m] = hm[m].Clone()
   prompt = interactive
-  for m in range(169):
+  for m in range(maxmoments):
     if corrected:
       h = hcorrect[m]
     else:
