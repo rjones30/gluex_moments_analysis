@@ -751,6 +751,7 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
     hchisq2.SetDirectory(0)
   hchisq3 = hchisq2.Clone("hchisq3")
   hchisq3.SetTitle("#chi^{2} distribution of constraints")
+  hchisq3.SetDirectory(0)
   if maxmoments == 0:
     maxmoments = 169
   hsample = [0] * maxmoments
