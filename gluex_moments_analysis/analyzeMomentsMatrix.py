@@ -749,6 +749,8 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
     hchisq2.GetXaxis().SetTitle("#chi^{2}")
     hchisq2.GetYaxis().SetTitle("kinematic bins")
     hchisq2.SetDirectory(0)
+  hchisq3 = hchisq2.Clone("hchisq3")
+  hchisq3.SetTitle("#chi^{2} distribution of constraints")
   if maxmoments == 0:
     maxmoments = 169
   hsample = [0] * maxmoments
@@ -813,11 +815,14 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
         h1.SetBinError(i+1, ccov[i,i]**0.5)
         h2.SetBinContent(i+1, refermom[i] / maxweight)
         h2.SetBinError(i+1, refercov[i,i]**0.5 / maxweight)
-      diff_mom = cmom - correctmom #refermom / maxweight
-      netcov = correctcov # + refercov / maxweight**2
+      diff_mom = cmom - refermom / maxweight
+      netcov = ccov + refercov / maxweight**2
       chi2 = diff_mom @ np.linalg.inv(netcov) @ diff_mom
       ndof = len(diff_mom)
       hchisq2.Fill(chi2)
+      diff_cons = cmom - correctmom
+      chi2_cons = diff_cons @ np.linalg.inv(correctcov) @ diff_cons
+      hchisq3.Fill(chi2_cons)
       h2.SetLineColor(2)
       h1.Draw()
       h2.Draw("same")
@@ -896,7 +901,7 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
                        "q to quit: ")
         if prompt == 'q':
           break
-  return hchisq,hchisq2
+  return hchisq,hchisq2,hchisq3
 
 def histogram_moments_correlations(support_moments=0):
   """
