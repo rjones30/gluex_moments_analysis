@@ -6,4 +6,5 @@
 	gSystem->AddIncludePath("-I" ROOT_ANALYSIS_HOME "/include/");
 	gSystem->Load(ROOT_ANALYSIS_HOME "/lib/libDSelector.so");
 	gSystem->Load("${ROOTSYS}/lib/libMathMore.so");
+	gROOT->ProcessLine(".L DSelector_etapi0_moments.C+O");
 }

@@ -58,6 +58,7 @@ class DSelector_etapi0_moments : public DSelector
 		TH1I* dHist_MissingMassSquared;
 		TH1I* dHist_BeamEnergy;
 
+	public:
 		unsigned long int runNo;
 		unsigned long int eventNo;
 		double weight;
