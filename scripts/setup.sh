@@ -50,6 +50,10 @@ export RCDB_CONNECTION=sqlite:////group/halld/www/halldweb/html/dist/rcdb.sqlite
 #export CCDB_CONNECTION=sqlite:////cvmfs/oasis.opensciencegrid.org/gluex/private/ccdb_2021-3-11.sqlite
 export JANA_CALIB_URL=$CCDB_CONNECTION
 
+# add pointers to gluex_root_analysis
+export ROOT_ANALYSIS_HOME=/cvmfs/oasis.opensciencegrid.org/gluex/gluex_root_analysis
+export LD_LIBRARY_PATH=$ROOT_ANALYSIS_HOME/$BMS_OSNAME/lib:$LD_LIBRARY_PATH
+
 # configure the version of ROOT
 export ROOTSYS=/cvmfs/oasis.opensciencegrid.org/gluex/root-6.22.06/x86_64-debug
 export LD_LIBRARY_PATH=$ROOTSYS/lib:$LD_LIBRARY_PATH
