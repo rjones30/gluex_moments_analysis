@@ -7,13 +7,13 @@
 #include <Math/SpecFuncMathMore.h>
 #include <climits>
 
-#include "DSelector_etapi0_moments.h"
+#include "trial_model.h"
 #include "generated_moments.h"
 
 std::string default_outfilename("generated_moments.root");
 char *outfilename = (char*)default_outfilename.c_str();
 
-DSelector_etapi0_moments models;
+trial_model1 model1;
 
 void usage()
 {
@@ -146,28 +146,25 @@ int main(int argc, char *argv[])
          thetaPi0 = pp[4]->Theta();
          phiPi0 = pp[4]->Phi();
 
-         models.model1_use_generated(true);
-         models.massEtaPi0_ = massEtaPi0;
-         models.abst_ = abst;
          momentsGJ = 0;
          for (int L=0; L < 13; L += 1) {
             for (int M=-L; M <= L; M += 1) {
-               YmomGJ[momentsGJ] = models.angular_moment(L, M, thetaGJ, phiGJ);
-               model1moment[momentsGJ] = models.model1_moment(L, M);
+               YmomGJ[momentsGJ] = trial_model::angular_moment(L, M, thetaGJ, phiGJ);
+               model1moment[momentsGJ] = model1.real_moment(L, M, massEtaPi0, abst);
                ++momentsGJ;
             }
          }
          momentsEta = 0;
          for (int L=0; L < 13; L += 2) {
             for (int M=-L; M <= L; M += 1) {
-               YmomEta[momentsEta] = models.angular_moment(L, M, thetaEta, phiEta);
+               YmomEta[momentsEta] = trial_model::angular_moment(L, M, thetaEta, phiEta);
                ++momentsEta;
             }
          }
          momentsPi0 = 0;
          for (int L=0; L < 13; L += 2) {
             for (int M=-L; M <= L; M += 1) {
-               YmomPi0[momentsPi0] = models.angular_moment(L, M, thetaPi0, phiPi0);
+               YmomPi0[momentsPi0] = trial_model::angular_moment(L, M, thetaPi0, phiPi0);
                ++momentsPi0;
             }
          }

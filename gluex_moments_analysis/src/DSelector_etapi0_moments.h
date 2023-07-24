@@ -58,7 +58,6 @@ class DSelector_etapi0_moments : public DSelector
 		TH1I* dHist_MissingMassSquared;
 		TH1I* dHist_BeamEnergy;
 
-	public:
 		unsigned long int runNo;
 		unsigned long int eventNo;
 		double weight;
@@ -98,13 +97,6 @@ class DSelector_etapi0_moments : public DSelector
  		double model1moment[169];
 		double model1moment_[169];
 
-		double angular_moment(int L, int M, double theta, double phi) const;
-		double model1_moment(int L, int M) const;
-		double model1_density(int source=0) const;
-
-		// This is where model 1 is defined
-		double model1_Lmax() const;
-		std::vector<double> model1_amplitude(int L, int M) const;
 		void model1_use_generated(int yesno=1);
 		int model1_generated_kinematics;
 
