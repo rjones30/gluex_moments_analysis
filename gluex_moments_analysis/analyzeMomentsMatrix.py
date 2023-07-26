@@ -941,5 +941,149 @@ def histogram_moments_correlations(support_moments=0):
       hcorr[name].SetBinContent(i+1, covinv[i,i] * cov[i,i])
   return hcorr
 
+def rank1_density_from_moments(moments):
+  """
+  Takes in a vector of real acceptance-corrected moments of length
+  (2n+1)**2 and returns a representation of the rank-1 density matrix
+  in the LM basis corresponding to the measured angular moments. The
+  density matrix is represented in terms of an rvector with (n+1)**4
+  components which is defined as follows. Ordered pairs (L,M) are
+  listed in increasing order of allowed values, as L=0..Lmax, M=-L..L
+  first incrementing M for fixed L, then incrementing L, with list
+  index LM = 0,1,2,...,n^2-1. Then, ordered pairs of elements from
+  this list are formed (LM,L'M') counting first over L'M', then over
+  LM, with final list elements ((L,M),(L',M'))[i] uniquely labeling
+  each component of the density matrix, i = 0,1,2,...(n+1)**4-1.
+  With this meaning of the index i, the r vector is defined as
+              /
+              | |R| Re{ rho[LM(i),L'M'(i)] }, L'M' >= LM
+      r[i] = <
+              | |R| Im{ rho[LM(i),L'M'(i)] }, L'M' < LM
+              \
+  Starting with (2n+1)**2 moments, the output vector is of length
+  (n+1)**4. The normalization factor |R| is found by applying
+  the requirment that Tr{rho}=1 to the density matrix formed out
+  of the components of r.
+  """
+  n = (moments.shape[0]**0.5 - 1) / 2
+  r = np.zeros([n**4], dtype=float)
+  return r
+
+def make_Kmatrix(Lmax=3):
+  """
+  Computes and returns the matrix K that gives the linear combination
+  of density matrix elements corresponding to each moment. The density
+  matrix is represented by (Lmax+1)**4 real values (see the r vector
+  definition at the head of rank1_density_from_moments), which the
+  K matrix maps onto the (2*Lmax+1)**2 moments as a linear transform.
+  """
+  sqrt2 = 2**0.5
+  Nmoments = (2*Lmax + 1)**2
+  Nquantum = (Lmax + 1)**2
+  K = np.zeros([Nmoments, Nquantum**2])
+  a = -1
+  for La in range(2*Lmax+1):
+    for Ma in range(-La, La+1):
+      a += 1
+      i = -1
+      for L1 in range(Lmax+1):
+        for M1 in range(-L1, L1+1):
+          i += 1
+          j = -1
+          for L2 in range(Lmax+1):
+            for M2 in range(-L2, L2+1):
+              j += 1
+              g = 0
+              if i == j:
+                g = (ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
+                                         2*M1, -2*M2, -2*Ma)
+                   * ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
+                                         0,    0,    0)
+                   * (-1)**M2)
+              elif Ma == 0 and i < j:
+                  g = (ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
+                                           2*M1, -2*M2, -2*Ma)
+                     * ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
+                                           0,    0,    0)
+                     * (-1)**M2
+                     + ROOT.Math.wigner_3j(2*L2, 2*L1, 2*La,
+                                           2*M2, -2*M1, -2*Ma)
+                     * ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
+                                           0,    0,    0)
+                     * (-1)**M1)
+              elif Ma > 0 and i < j:
+                  g = (ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
+                                           2*M1, -2*M2, -2*Ma)
+                     * ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
+                                           0,    0,    0)
+                     * (-1)**M2 * sqrt2
+                     + ROOT.Math.wigner_3j(2*L2, 2*L1, 2*La,
+                                           2*M2, -2*M1, -2*Ma)
+                     * ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
+                                           0,    0,    0)
+                     * (-1)**M1 * sqrt2)
+              elif Ma < 0 and i > j:
+                  g = (ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
+                                           2*M1, -2*M2, 2*Ma)
+                     * ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
+                                           0,    0,    0)
+                     * (-1)**M2 * (-sqrt2)
+                     - ROOT.Math.wigner_3j(2*L2, 2*L1, 2*La,
+                                           2*M2, -2*M1, 2*Ma)
+                     * ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
+                                           0,    0,    0)
+                     * (-1)**M1 * (-sqrt2))
+              K[a, Nquantum*i+j] = g * ((2*L1+1) * (2*L2+1) * (2*La+1)
+                                        / (4 * np.pi))**0.5
+  return K
+
+def get_model1_rvector(massEtaPi0, abst):
+  """
+  Returns the r vector representation of the density matrix defined
+  by model 1 at kinematics massEtaPi0,abst. 
+  """
+  try:
+    model1 = ROOT.trial_model1()
+  except:
+    ROOT.gROOT.ProcessLine(".L src/trial_model.C+O")
+    model1 = ROOT.trial_model1()
+  Lmax = int(model1.amplitude_Lmax())
+  rvector = np.zeros([(Lmax + 1)**4], dtype=float)
+  a = -1
+  i = -1
+  for L1 in range(Lmax+1):
+    for M1 in range(-L1,L1+1):
+      i += 1
+      amp1 = model1.amplitude(L1, M1, massEtaPi0, abst)
+      j = -1
+      for L2 in range(Lmax+1):
+        for M2 in range(-L2,L2+1):
+          j += 1
+          amp2 = model1.amplitude(L2, M2, massEtaPi0, abst)
+          a += 1
+          if i <= j:
+            rvector[a] = amp1[0] * amp2[0] + amp1[1] * amp2[1]
+          else:
+            rvector[a] = amp1[1] * amp2[0] - amp1[0] * amp2[1]
+  return rvector
+
+def get_model1_moments(massEtaPi0, abst):
+  """
+  Returns the moments vector defined by model 1 at kinematics massEtaPi0,abst. 
+  """
+  try:
+    model1 = ROOT.trial_model1()
+  except:
+    ROOT.gROOT.ProcessLine(".L src/trial_model.C+O")
+    model1 = ROOT.trial_model1()
+  Lmax = int(model1.amplitude_Lmax())
+  moments = np.zeros([(2*Lmax+1)**2], dtype=float)
+  i = -1
+  for L in range(2*Lmax+1):
+    for M in range(-L,L+1):
+      i += 1
+      moments[i] = model1.real_moment(L, M, massEtaPi0, abst)
+  return moments
+
 srcdir = "/".join(__file__.split('/')[:-1]) + "/src"
 ROOT.gROOT.ProcessLine(f".L {srcdir}/fill_M_histograms.C+O")

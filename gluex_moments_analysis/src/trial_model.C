@@ -7,6 +7,7 @@
 // Defines the partial-wave model for testing analysis of 
 // experimental angular distributions in the eta,pi0 system.
 
+#include <math.h>
 #include "trial_model.h"
 
 double trial_model::angular_moment(int L, int M, double theta, double phi)
@@ -51,10 +52,10 @@ double trial_model::real_moment(int L, int M, double mX, double abst) const
             std::vector<double> amp1 = amplitude(L1, M1, mX, abst);
             std::vector<double> amp2 = amplitude(L2, -M2, mX, abst);
             double a = ROOT::Math::wigner_3j(2*L1, 2*L2, 2*L, 2*M1, 2*M2, -2*M0)
-                  * ROOT::Math::wigner_3j(2*L1, 2*L2, 2*L, 0, 0, 0)
-                  * ((M2 % 2)? -1 : 1)
-                  * sqrt(2*L1+1) * sqrt(2*L2+1) * sqrt(2*L+1)
-                  / sqrt(4*M_PI);
+                     * ROOT::Math::wigner_3j(2*L1, 2*L2, 2*L, 0, 0, 0)
+                     * ((M2 % 2)? -1 : 1)
+                     * sqrt(2*L1+1) * sqrt(2*L2+1) * sqrt(2*L+1)
+                     / sqrt(4*M_PI);
             moment[0] += a * (amp1[0] * amp2[0] + amp1[1] * amp2[1]);
             moment[1] += a * (amp1[1] * amp2[0] - amp1[0] * amp2[1]);
          }
