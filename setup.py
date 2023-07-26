@@ -7,7 +7,7 @@ from setuptools import setup
 # the name, author and contact, and description.
 setup(
     name='gluex_moments_analysis',
-    version='0.2.08',
+    version='0.2.09',
     author='Richard Jones',
     author_email='richard.t.jones@uconn.edu',
     description='toolkit for implementation of support-vector moments analysis',
