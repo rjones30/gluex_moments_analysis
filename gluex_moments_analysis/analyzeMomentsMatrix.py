@@ -941,34 +941,6 @@ def histogram_moments_correlations(support_moments=0):
       hcorr[name].SetBinContent(i+1, covinv[i,i] * cov[i,i])
   return hcorr
 
-def rank1_density_from_moments(moments):
-  """
-  Takes in a vector of real acceptance-corrected moments of length
-  (2n+1)**2 and returns a representation of the rank-1 density matrix
-  in the LM basis corresponding to the measured angular moments. The
-  density matrix is represented in terms of an rvector with (n+1)**4
-  components which is defined as follows. Ordered pairs (L,M) are
-  listed in increasing order of allowed values, as L=0..Lmax, M=-L..L
-  first incrementing M for fixed L, then incrementing L, with list
-  index LM = 0,1,2,...,n^2-1. Then, ordered pairs of elements from
-  this list are formed (LM,L'M') counting first over L'M', then over
-  LM, with final list elements ((L,M),(L',M'))[i] uniquely labeling
-  each component of the density matrix, i = 0,1,2,...(n+1)**4-1.
-  With this meaning of the index i, the r vector is defined as
-              /
-              | |R| Re{ rho[LM(i),L'M'(i)] }, L'M' >= LM
-      r[i] = <
-              | |R| Im{ rho[LM(i),L'M'(i)] }, L'M' < LM
-              \
-  Starting with (2n+1)**2 moments, the output vector is of length
-  (n+1)**4. The normalization factor |R| is found by applying
-  the requirment that Tr{rho}=1 to the density matrix formed out
-  of the components of r.
-  """
-  n = (moments.shape[0]**0.5 - 1) / 2
-  r = np.zeros([n**4], dtype=float)
-  return r
-
 def make_Kmatrix(Lmax=3):
   """
   Computes and returns the matrix K that gives the linear combination
@@ -977,7 +949,6 @@ def make_Kmatrix(Lmax=3):
   definition at the head of rank1_density_from_moments), which the
   K matrix maps onto the (2*Lmax+1)**2 moments as a linear transform.
   """
-  sqrt2 = 2**0.5
   Nmoments = (2*Lmax + 1)**2
   Nquantum = (Lmax + 1)**2
   K = np.zeros([Nmoments, Nquantum**2])
@@ -1010,37 +981,66 @@ def make_Kmatrix(Lmax=3):
                                            2*M2, -2*M1, -2*Ma)
                      * ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
                                            0,    0,    0)
-                     * (-1)**M1)
+                     * (-1)**M1) / 2**0.5
               elif Ma > 0 and i < j:
                   g = (ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
                                            2*M1, -2*M2, -2*Ma)
                      * ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
                                            0,    0,    0)
-                     * (-1)**M2 * sqrt2
+                     * (-1)**M2
                      + ROOT.Math.wigner_3j(2*L2, 2*L1, 2*La,
                                            2*M2, -2*M1, -2*Ma)
                      * ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
                                            0,    0,    0)
-                     * (-1)**M1 * sqrt2)
+                     * (-1)**M1)
               elif Ma < 0 and i > j:
                   g = (ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
                                            2*M1, -2*M2, 2*Ma)
                      * ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
                                            0,    0,    0)
-                     * (-1)**M2 * (-sqrt2)
+                     * (-1)**M2
                      - ROOT.Math.wigner_3j(2*L2, 2*L1, 2*La,
                                            2*M2, -2*M1, 2*Ma)
                      * ROOT.Math.wigner_3j(2*L1, 2*L2, 2*La,
                                            0,    0,    0)
-                     * (-1)**M1 * (-sqrt2))
+                     * (-1)**M1) * (-1)
               K[a, Nquantum*i+j] = g * ((2*L1+1) * (2*L2+1) * (2*La+1)
                                         / (4 * np.pi))**0.5
   return K
 
+def make_Bmatrix(Lmax=3):
+  """
+  Computes and returns the matrix B that enforces the constraint that
+  the density matrix is rank 1, which is written in terms of the rvector
+  representation of the density matrix as r @ B @ r = 0.
+  """
+  Nquantum = (Lmax + 1)**2
+  f = np.zeros([Nquantum**2], dtype=float)
+  for i in range(Nquantum):
+    f[i * (Nquantum + 1)] = 1
+  B = (np.kron(f.reshape(Nquantum**2,1), f.reshape(1,Nquantum**2))
+       - np.diag(np.ones([Nquantum**2], dtype=float)))
+  return B
+
 def get_model1_rvector(massEtaPi0, abst):
   """
   Returns the r vector representation of the density matrix defined
-  by model 1 at kinematics massEtaPi0,abst. 
+  by model 1 at kinematics massEtaPi0,abst. The r vector is a compact
+  representation of the n x n Hermetian density matrix where n=Lmax+1
+  in terms of n**4 real components defined as follows. Basis quantum
+  numbers (L,M) are listed in increasing order of allowed values, as
+  L=0..Lmax, M=-L..L first incrementing M for fixed L, then increasing
+  L, with list index LM = 0,1,2,...,n^2-1. Then, pairs of elements from
+  this list are formed (LM,L'M') counting first over L'M', then over
+  LM, with final list elements ((L,M),(L',M'))[i] uniquely labeling
+  each component of the density matrix, i = 0,1,2,...n**4-1. The r[i]
+  vector elements are defined as
+              /
+              | sqrt(2) |R| Re{ rho[LM(i),L'M'(i)] }, L'M' > LM
+      r[i] = <  |R| rho[LM(i),L'M'(i)], L'M' == LM
+              | sqrt(2) |R| Im{ rho[LM(i),L'M'(i)] }, L'M' < LM
+              \
+  where |R| is the trace of the rho matrix.
   """
   try:
     model1 = ROOT.trial_model1()
@@ -1048,7 +1048,8 @@ def get_model1_rvector(massEtaPi0, abst):
     ROOT.gROOT.ProcessLine(".L src/trial_model.C+O")
     model1 = ROOT.trial_model1()
   Lmax = int(model1.amplitude_Lmax())
-  rvector = np.zeros([(Lmax + 1)**4], dtype=float)
+  rvector = np.empty([(Lmax + 1)**4], dtype=float)
+  sqrt2 = 2**0.5
   a = -1
   i = -1
   for L1 in range(Lmax+1):
@@ -1061,11 +1062,50 @@ def get_model1_rvector(massEtaPi0, abst):
           j += 1
           amp2 = model1.amplitude(L2, M2, massEtaPi0, abst)
           a += 1
-          if i <= j:
+          if i < j:
+            rvector[a] = sqrt2 * (amp1[0] * amp2[0] + amp1[1] * amp2[1])
+          elif i == j:
             rvector[a] = amp1[0] * amp2[0] + amp1[1] * amp2[1]
           else:
-            rvector[a] = amp1[1] * amp2[0] - amp1[0] * amp2[1]
+            rvector[a] = sqrt2 * (amp1[1] * amp2[0] - amp1[0] * amp2[1])
   return rvector
+
+def get_model1_rmatrix(massEtaPi0=0, abst=0, rvector=[]):
+  """
+  Returns the complex density matrix defined by model 1 at kinematics
+  massEtaPi0,abst, either by reading it from the rvector or by computing
+  it directly from the quantum amplitudes if rvector=[]. If rvector is
+  given then arguments massEtaPi0,abst are ignored. The rmatrix returned
+  is converted to a density matrix by dividing by its trace.
+  """
+  try:
+    model1 = ROOT.trial_model1()
+  except:
+    ROOT.gROOT.ProcessLine(".L src/trial_model.C+O")
+    model1 = ROOT.trial_model1()
+  Lmax = int(model1.amplitude_Lmax())
+  nbasis = (Lmax + 1)**2
+  sqrt2 = 2**0.5
+  if len(rvector) > 0:
+    rmatrix = np.empty([nbasis, nbasis], dtype=complex)
+    for i in range(nbasis):
+      rmatrix[i,i] = rvector[i * (nbasis + 1)]
+      for j in range(i+1, nbasis):
+        rmatrix[i,j] = (rvector[i * nbasis + j] +
+                        rvector[j * nbasis + i] * 1j) / sqrt2
+        rmatrix[j,i] = (rvector[i * nbasis + j] -
+                        rvector[j * nbasis + i] * 1j) / sqrt2
+  else:
+    amp = np.empty([nbasis], dtype=complex)
+    i = -1
+    for L in range(Lmax+1):
+      for M in range(-L, L+1):
+        i += 1
+        a = model1.amplitude(L, M, massEtaPi0, abst)
+        amp[i] = a[0] + a[1] * 1j
+    rmatrix = np.array([[amp[i] * np.conjugate(amp[j]) for i in range(nbasis)]
+                                                       for j in range(nbasis)])
+  return rmatrix
 
 def get_model1_moments(massEtaPi0, abst):
   """
@@ -1077,7 +1117,7 @@ def get_model1_moments(massEtaPi0, abst):
     ROOT.gROOT.ProcessLine(".L src/trial_model.C+O")
     model1 = ROOT.trial_model1()
   Lmax = int(model1.amplitude_Lmax())
-  moments = np.zeros([(2*Lmax+1)**2], dtype=float)
+  moments = np.empty([(2*Lmax+1)**2], dtype=float)
   i = -1
   for L in range(2*Lmax+1):
     for M in range(-L,L+1):
