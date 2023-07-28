@@ -19,7 +19,7 @@ test/
 *.png
 *_moments_[0-9]*
 archive/*
-src/generated_moments
+gluex_moments_analysis/src/generated_moments
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
