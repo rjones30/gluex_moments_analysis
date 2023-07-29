@@ -508,16 +508,16 @@ def analyze_moments(massEtaPi0_limits=(0.6,2.5), abst_limits=(0.0,2.5), model=1,
 
   Minv = np.linalg.inv(M)
   correctmom = Minv @ samplemom
-  correctcov = Minv @ samplecov @ np.transpose(Minv)
+  correctcov = Minv @ samplecov @ Minv.T
 
   # transform from spherical basis to support vector moments
   if False:
-    samplemom = np.transpose(W) @ samplemom
-    samplecov = np.transpose(W) @ samplecov @ W
-    correctmom = np.transpose(W) @ correctmom
-    correctcov = np.transpose(W) @ correctcov @ W
-    refermom = Vt @ refermom @ np.transpose(Vt)
-    refercov = Vt @ refercov @ np.transpose(Vt)
+    samplemom = W.T @ samplemom
+    samplecov = W.T @ samplecov @ W
+    correctmom = W.T @ correctmom
+    correctcov = W.T @ correctcov @ W
+    refermom = Vt @ refermom @ Vt.T
+    refercov = Vt @ refercov @ Vt.T
 
   Nmom = len(samplemom)
   hsamp = ROOT.TH1D("hsamp", "sample moments, uncorrected", Nmom, 0, Nmom)
@@ -694,14 +694,12 @@ def apply_constraints(S, moments, covariance, histograms=[]):
   element of the return 3-tuple, otherwise an empty list.
   """
   C = covariance
-  St = np.transpose(S)
-  D = C @ St @ np.linalg.inv(S @ C @ St) @ S
+  D = C @ S.T @ np.linalg.inv(S @ C @ S.T) @ S
   if D.shape != covariance.shape:
     print("error in apply_constraints - shape of S does not match moments")
     return S, moments, covariance
-  Dt = np.transpose(D)
   h = moments - D @ moments
-  CC = C - D @ C - C @ Dt + D @ C @ Dt
+  CC = C - D @ C - C @ D.T + D @ C @ D.T
   histograms_cons = []
   Nmoments = len(moments)
   if len(histograms) > 0:
@@ -797,7 +795,7 @@ def scan_em(corrected=1, scale=1, tcut=0, finebins=0,
       refermom = f5sample['reference_moment'][:maxmoments]
       refercov = f5sample['reference_covariance'][:maxmoments,:maxmoments]
       correctmom = Minv @ samplemom
-      correctcov = Minv @ samplecov @ np.transpose(Minv)
+      correctcov = Minv @ samplecov @ Minv.T
       if np.max(constraints) > np.min(constraints):
         cmom,ccov,chc = apply_constraints(constraints, correctmom, correctcov, hc)
       else:
@@ -935,7 +933,7 @@ def histogram_moments_correlations(support_moments=0):
       f5saved = h5py.File(datadir + "/Msaved.h5")
       M = f5saved['Moments'][:]
       W,E,Vt = np.linalg.svd(M)
-      cov = np.transpose(W) @ cov @ W
+      cov = W.T @ cov @ W
     covinv = np.linalg.inv(cov)
     for i in range(Nmoments):
       hcorr[name].SetBinContent(i+1, covinv[i,i] * cov[i,i])
