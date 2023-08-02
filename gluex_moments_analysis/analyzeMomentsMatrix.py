@@ -1020,7 +1020,7 @@ def make_Bmatrix(Lmax=3):
        - np.diag(np.ones([Nquantum**2], dtype=float)))
   return B
 
-def get_model1_rvector(massEtaPi0, abst):
+def get_model1_rvector(massEtaPi0=0, abst=0, rmatrix=[]):
   """
   Returns the r vector representation of the density matrix defined
   by model 1 at kinematics massEtaPi0,abst. The r vector is a compact
@@ -1036,10 +1036,21 @@ def get_model1_rvector(massEtaPi0, abst):
               /
               | sqrt(2) |R| Re{ rho[LM(i),L'M'(i)] }, L'M' > LM
       r[i] = <  |R| rho[LM(i),L'M'(i)], L'M' == LM
-              | sqrt(2) |R| Im{ rho[LM(i),L'M'(i)] }, L'M' < LM
+              | sqrt(2) |R| Im{ rho[L'M'(i),LM(i)] }, L'M' < LM
               \
-  where |R| is the trace of the rho matrix.
+  where |R| is the trace of the rho matrix. If rmatrix is given then
+  massEtaPi0,abst are ignored, and the information is taken from the
+  density matrix specified by rmatrix.
   """
+  if len(rmatrix) > 0:
+    N = rmatrix.shape[0]
+    rvector = np.empty([N**2], dtype=float)
+    for i in range(N):
+      rvector[i*N + i] = np.real(rmatrix[i,i])
+      for j in range(i+1, N):
+        rvector[i*N + j] = np.real(rmatrix[i,j]) * 2**0.5
+        rvector[j*N + i] = np.imag(rmatrix[i,j]) * 2**0.5
+    return rvector
   try:
     model1 = ROOT.trial_model1()
   except:
