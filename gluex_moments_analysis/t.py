@@ -409,9 +409,8 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
     lookback = 10000000
     redirects = [0] * lookback
     distances = [0] * lookback
-    axes = range(207, nalpha)
-    goals = range(207, nalpha)
-    naxes = len(axes)
+    axes = [i for i in range(207, nalpha)]
+    goals = [i for i in range(207, nalpha)]
     domegas = np.zeros([lookback, nalpha], dtype=float)
     domega = np.zeros([nalpha], dtype=float)
     for itry in range(niter):
@@ -435,7 +434,8 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
             jacoeinv[i,i] = 1
           else:
             jacoeinv[i,i] = 0.01
-        domega = jacovt.T @ jacoeinv @ jacou.T @ dgoal
+        domega = np.zeros([nalpha], dtype=float)
+        domega[axes] = np.real(jacovt.T @ jacoeinv @ jacou.T @ dgoal)
         domega *= direction
         normdomega = np.linalg.norm(domega)
       if normdomega > 1:
@@ -443,8 +443,8 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
       else:
         dostep = np.real(domega)
       domegas[itry % lookback] = np.zeros([nalpha], dtype=float)
-      domegas[itry % lookback][axes] = dostep
-      fdostep = np.einsum('ijk,k', f[:,:,axes], dostep)
+      domegas[itry % lookback] = dostep
+      fdostep = np.einsum('ijk,k', f, dostep)
       def expm(m, prec=1e-20):
         result = np.diag(np.ones(m.shape[0], dtype=complex))
         mscale = np.linalg.norm(m)
@@ -481,11 +481,28 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
           one = np.diag(np.ones(fdostep.shape[0], dtype=complex))
           print("|exp_fdostep * exp_fdostep.T - 1| =", np.linalg.norm(exp_fdostep @ exp_fdostep.T - one))
           print("exp_fdostep =\n", np.round(np.real(exp_fdostep), 6))
+          print(len(axes), "axes:", axes)
+          print(len(goals), "goals:", goals)
           print("jacou.T @ dgoal =\n", np.round(np.real(jacou.T @ dgoal), 6))
           print("jacoe=\n", np.round(jacoe, 6))
+          print("jacovt @ alpha=\n", np.round(np.real(jacovt @ alpha[axes]), 6))
           while True:
-            ans = input("dial:angle/s/q?")
+            ans = input("dial:angle/+/-/s/q?")
             try:
+              if len(ans) > 0 and ans[0] == '+':
+                for axis in ans[1:].split(','):
+                  if not int(axis) in axes:
+                    axes.append(int(axis))
+                print(len(axes), "axes:", axes)
+                domega *= 0
+                break
+              elif len(ans) > 0 and ans[0] == '-':
+                for axis in ans[1:].split(','):
+                  if int(axis) in axes:
+                    axes.remove(int(axis))
+                print(len(axes), "axes:", axes)
+                domega *= 0
+                break
               sans = ans.split(':')
               dial = int(sans[0])
               angle = float(sans[1])
@@ -494,8 +511,18 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
                 dalpha = trial_dalpha
                 domega = trial_domega
               break
-            trial_domega = jacovt[dial] * angle
-            trial_fdomega = np.einsum('ijk,k', f[:,:,axes], trial_domega)
+            trial_domega = np.zeros([nalpha], dtype=float)
+            dials = [i for i in range(nalpha)]
+            for axis in axes:
+              dials.remove(axis)
+              dials.insert(0,-axis)
+            if dial < len(axes):
+              trial_domega[axes] = np.real(jacovt[dial]) * angle
+              print(f"twisting skewed axis {dial} by {angle}")
+            else:
+              trial_domega[dials[dial]] = angle
+              print(f"twisting basis axis {dials[dial]} by {angle}")
+            trial_fdomega = np.einsum('ijk,k', f, trial_domega)
             trial_exp_fdomega = expm(trial_fdomega)
             trial_alpha = trial_exp_fdomega @ alpha
             trial_dalpha = trial_alpha - alpha
@@ -505,7 +532,7 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
             trial_distance = np.linalg.norm(trial_dgoal)
             trial_normalpha = np.linalg.norm(trial_alpha)
             print("|rank1|,|alpha|,|dalpha|,|domega|,|alpha-truealpha|,dist=",
-                  f"{np.linalg.norm(tracerho0 * trial_rho - trial_rho @ rho):12.6e}",
+                  f"{np.linalg.norm(tracerho0 * trial_rho - trial_rho @ trial_rho):12.6e}",
                   f"{np.real(trial_normalpha) / tracerho0:18.15f}",
                   f"{np.linalg.norm(trial_dalpha):9.6f}",
                   f"{np.linalg.norm(trial_domega):9.6f}",
