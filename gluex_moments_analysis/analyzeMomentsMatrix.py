@@ -38,7 +38,7 @@ def usage():
   print(" >>> cmom,ccov,chists = ana.apply_constraints(S, moments, covariance, hists)")
   print(" >>> h = ana.histogram_moments_correlations()")
 
-if len(sys.argv) < 2 or sys.argv[1][0] == '-':
+if len(sys.argv) > 1 and sys.argv[1][0] == '-':
   usage()
 
 h5inputs = {}

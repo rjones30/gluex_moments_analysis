@@ -45,7 +45,6 @@ upcache = {}
 mPi0,mPi0 = 0,0
 mEta,mEta_ = 0,0
 mGJ,mGJ_ = 0,0
-usage()
 
 def open(intree_name):
    """
