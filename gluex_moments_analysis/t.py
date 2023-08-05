@@ -448,13 +448,30 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
       def expm(m, prec=1e-20):
         result = np.diag(np.ones(m.shape[0], dtype=complex))
         mscale = np.linalg.norm(m)
-        if mscale > prec:
-          mfactor = np.array(m, dtype=complex)
-          for deg in range(1,1000):
-            result = result + mfactor
-            mfactor = mfactor @ m / (deg + 1)
-            if np.linalg.norm(mfactor) < mscale * prec:
-              break
+        if mscale < prec:
+          return result
+        nsteps = int(mscale) + 1
+        mfactor = np.array(m / nsteps, dtype=complex)
+        for deg in range(1,1000):
+          result = result + mfactor
+          mfactor = mfactor @ m / nsteps / (deg + 1)
+          if np.linalg.norm(mfactor) < mscale * prec:
+            break
+        if nsteps == 1:
+          return result
+        n = 1
+        results = {}
+        results[n] = np.array(result)
+        while n * 2 <= nsteps:
+          n *= 2
+          result = result @ result
+          results[n] = np.array(result)
+        nsteps -= n
+        while nsteps > 0:
+          n //= 2
+          if nsteps >= n:
+            result = result @ results[n]
+            nsteps -= n
         return result
       #dalpha = scipy.linalg.expm(fdostep_product) @ alpha - alpha
       exp_fdostep = expm(fdostep)
@@ -536,7 +553,7 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
                   f"{np.real(trial_normalpha) / tracerho0:18.15f}",
                   f"{np.linalg.norm(trial_dalpha):9.6f}",
                   f"{np.linalg.norm(trial_domega):9.6f}",
-                  f"{np.linalg.norm(alpha-agoal):9.6f}",
+                  f"{np.linalg.norm(trial_alpha - agoal):9.6f}",
                   f"{trial_distance}")
         domega -= dostep
       else:
