@@ -405,7 +405,7 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
     except:
       sigma_kind = kind
       d,f = get_SUNtensors(sigma)
-    direction = -1
+    direction = 1
     lookback = 10000000
     redirects = [0] * lookback
     distances = [0] * lookback
@@ -435,7 +435,7 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
           else:
             jacoeinv[i,i] = 0.01
         domega = np.zeros([nalpha], dtype=float)
-        domega[axes] = np.real(jacovt.T @ jacoeinv @ jacou.T @ dgoal)
+        domega[axes] = -np.real(jacovt.T @ jacoeinv @ jacou.T @ dgoal)
         domega *= direction
         normdomega = np.linalg.norm(domega)
       if normdomega > 1:
@@ -486,8 +486,14 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
             f"{distance}")
       now = itry % lookback
       if interactive:
-        ans = input("i to inspect, c to continue, q to quit:")
-        if ans == 'c':
+        ans = input("r to restart, i to inspect, c to continue, q to quit:")
+        if ans == 'r':
+          domega *= 0
+          direction = 1
+          for i in range(nalpha):
+            alpha[i] = 2 * np.real(np.trace(sigma[i] @ rho1))
+          continue
+        elif ans == 'c':
           if now > 1:
             redirects[now-1] = 1
           interactive = False
@@ -504,7 +510,7 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
           print("jacoe=\n", np.round(jacoe, 6))
           print("jacovt @ alpha=\n", np.round(np.real(jacovt @ alpha[axes]), 6))
           while True:
-            ans = input("dial:angle/+/-/s/q?")
+            ans = input("dial:angle/+/-/s/q? ")
             try:
               if len(ans) > 0 and ans[0] == '+':
                 for axis in ans[1:].split(','):
@@ -575,12 +581,12 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
           if abs(distances[now]) < 1e-10:
             break
           print("******WARNING******* ", end="")
-          print("stagnated, let's randomize the goals and go interactive")
+          print("stagnated, let's go interactive")
           interactive = 1
           continue
         elif sum([np.linalg.norm(domegas[i+1] - domegas[i]) for i in range(now-10, now)]) < 1e-4:
           print("******WARNING******* ", end="")
-          print("cycling, let's try a half-way point")
+          print("cycling, let's go interactive")
           interactive = 1
           continue
       
