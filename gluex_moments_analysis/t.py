@@ -413,6 +413,8 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
     goals = [i for i in range(207, nalpha)]
     domegas = np.zeros([lookback, nalpha], dtype=float)
     domega = np.zeros([nalpha], dtype=float)
+    frozen_axes = False
+    fixed_axes = []
     for itry in range(niter):
       rho = (np.diag(np.ones([N], dtype=complex) * tracerho0 / N) +
              np.einsum('i,ijk', alpha, sigma[:nalpha]))
@@ -422,11 +424,14 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
       normalpha = np.linalg.norm(alpha)
       normdomega = np.linalg.norm(domega)
       if normdomega < 1e-6:
-        jacob = np.einsum('i,ijk', alpha, f[:,goals][:,:,axes])
-        jacou,jacoe,jacovt = np.linalg.svd(jacob)
+        if not frozen_axes:
+          jacob = np.einsum('i,ijk', alpha, f[:,goals][:,:,axes])
+          jacou,jacoe,jacovt = np.linalg.svd(jacob)
         jacoeinv = np.zeros(jacob.T.shape, dtype=float)
         for i in range(len(jacoe)):
-          if jacoe[i] > 1e-4:
+          if i in fixed_axes:
+            continue
+          elif jacoe[i] > 1e-4:
             jacoeinv[i,i] = 1/jacoe[i]
           elif jacoe[i] > 1e-8:
             jacoeinv[i,i] = 1/jacoe[i]**0.5
@@ -508,20 +513,47 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
           print(len(goals), "goals:", goals)
           print("jacou.T @ dgoal =\n", np.round(np.real(jacou.T @ dgoal), 6))
           print("jacoe=\n", np.round(jacoe, 6))
-          print("jacovt @ alpha=\n", np.round(np.real(jacovt @ alpha[axes]), 6))
+          print("jacovt @ alpha=\n", np.round(np.real(jacovt @ alpha[axes]), 6)[:min([len(axes), 49])])
           while True:
-            ans = input("dial:angle/+/-/s/q? ")
+            ans = input("dial:angle/+/-/f/s/q? ")
             try:
-              if len(ans) > 0 and ans[0] == '+':
+              if len(ans) > 0 and ans[0] == 'f':
+                try:
+                  axis = int(ans[1:])
+                  if axis in fixed_axes:
+                    fixed_axes.remove(axis)
+                    print(f"axis {axis} freed")
+                  else:
+                    fixed_axes.append(axis)
+                    print(f"axis {axis} fixed")
+                except:
+                  if frozen_axes:
+                    frozen_axes = False
+                    print("axes unfrozen")
+                  else:
+                    frozen_axes = True
+                    print("axes frozen")
+                break
+              elif len(ans) > 0 and ans[0] == '+':
                 for axis in ans[1:].split(','):
-                  if not int(axis) in axes:
+                  if '-' in axis:
+                    axe = axis.split('-')
+                    for ax in range(int(axe[0]), int(axe[1])+1):
+                      if not ax in axes:
+                        axes.append(ax)
+                  elif not int(axis) in axes:
                     axes.append(int(axis))
                 print(len(axes), "axes:", axes)
                 domega *= 0
                 break
               elif len(ans) > 0 and ans[0] == '-':
                 for axis in ans[1:].split(','):
-                  if int(axis) in axes:
+                  if '-' in axis:
+                    axe = axis.split('-')
+                    for ax in range(int(axe[0]), int(axe[1])+1):
+                      if ax in axes:
+                        axes.remove(ax)
+                  elif int(axis) in axes:
                     axes.remove(int(axis))
                 print(len(axes), "axes:", axes)
                 domega *= 0
@@ -554,6 +586,9 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
             trial_dgoal = agoal[goals] - trial_alpha[goals]
             trial_distance = np.linalg.norm(trial_dgoal)
             trial_normalpha = np.linalg.norm(trial_alpha)
+            one = np.diag(np.ones(fdostep.shape[0], dtype=complex))
+            print("|exp_fdomega - 1| =",
+                  f"{np.linalg.norm(trial_exp_fdomega - one)}")
             print("|rank1|,|alpha|,|dalpha|,|domega|,|alpha-truealpha|,dist=",
                   f"{np.linalg.norm(tracerho0 * trial_rho - trial_rho @ trial_rho):12.6e}",
                   f"{np.real(trial_normalpha) / tracerho0:18.15f}",
@@ -584,7 +619,7 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
           print("stagnated, let's go interactive")
           interactive = 1
           continue
-        elif sum([np.linalg.norm(domegas[i+1] - domegas[i]) for i in range(now-10, now)]) < 1e-4:
+        elif sum([np.linalg.norm(domegas[i+1] - domegas[i]) for i in range(now-10, now)]) < 1e-9:
           print("******WARNING******* ", end="")
           print("cycling, let's go interactive")
           interactive = 1
