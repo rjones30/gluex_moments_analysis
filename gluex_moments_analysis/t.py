@@ -513,7 +513,8 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
           print(len(goals), "goals:", goals)
           print("jacou.T @ dgoal =\n", np.round(np.real(jacou.T @ dgoal), 6))
           print("jacoe=\n", np.round(jacoe, 6))
-          print("jacovt @ alpha=\n", np.round(np.real(jacovt @ alpha[axes]), 6)[:min([len(axes), 49])])
+          print("jacovt @ alpha=\n", np.round(np.real(jacovt @ alpha[axes]), 6)[:min([len(axes), 56])])
+          print("jacovt @ agoal=\n", np.round(np.real(jacovt @ agoal[axes]), 6)[:min([len(axes), 56])])
           while True:
             ans = input("dial:angle/+/-/f/s/q? ")
             try:
@@ -612,7 +613,7 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
           interactive = 1
           continue
       if now > 10:
-        if abs(distances[now] / distances[now-10] - 1) < 1e-5:
+        if abs(distances[now] / distances[now-10] - 1) < 1e-9:
           if abs(distances[now]) < 1e-10:
             break
           print("******WARNING******* ", end="")
