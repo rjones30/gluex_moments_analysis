@@ -1,6 +1,5 @@
 import gluex_moments_analysis.analyzeMomentsMatrix as ana
 import numpy as np
-import random
 import scipy
 
 def get_Kmatrix():
@@ -139,8 +138,8 @@ def get_SUNtensors(sigma):
 
 def test_Kmatrix(nrandom=1000):
   for i in range(nrandom):
-    abst = random.uniform(0,2)
-    mX = random.uniform(0.6,2.4)
+    abst = np.random.uniform(0,2)
+    mX = np.random.uniform(0.6,2.4)
     h = ana.get_model1_moments(mX, abst)
     r = ana.get_model1_rvector(mX, abst)
     diff = np.linalg.norm(h - K @ r)
@@ -150,8 +149,8 @@ def test_Kmatrix(nrandom=1000):
 
 def test_rmatrix(nrandom=1000):
   for i in range(nrandom):
-    abst = random.uniform(0,2)
-    mX = random.uniform(0.6,2.4)
+    abst = np.random.uniform(0,2)
+    mX = np.random.uniform(0.6,2.4)
     rvector = ana.get_model1_rvector(mX, abst)
     rho = ana.get_model1_rmatrix(mX, abst)
     rrho = ana.get_model1_rmatrix(rvector=rvector)
@@ -174,8 +173,8 @@ def test_null_rmatrix():
 def rank_of_rmatrix(nrandom=1000):
   Kinv = get_Kpseudoinverse()
   for i in range(nrandom):
-    abst = random.uniform(0,2)
-    mX = random.uniform(0.6,2.4)
+    abst = np.random.uniform(0,2)
+    mX = np.random.uniform(0.6,2.4)
     rho1 = ana.get_model1_rmatrix(mX, abst)
     h = ana.get_model1_moments(mX, abst)
     rfromh = Kinv @ h
@@ -193,8 +192,8 @@ def dig_for_rmatrix(nrandom=1000, niter=100, nalpha=207, truestart=0, match_chec
   Kinv = get_Kpseudoinverse()
   sigma = get_SUNgenerators()
   for itry in range(nrandom):
-    abst = random.uniform(0,2)
-    mX = random.uniform(0.6,2.4)
+    abst = np.random.uniform(0,2)
+    mX = np.random.uniform(0.6,2.4)
     h = ana.get_model1_moments(mX, abst)
     rvector0 = Kinv @ h
     rho0 = ana.get_model1_rmatrix(rvector=rvector0)
@@ -267,8 +266,8 @@ def seek_for_rmatrix(nrandom=1000, niter=100, truestart=0, eps=1):
   Kinv = get_Kpseudoinverse()
   sigma = get_SUNgenerators()
   for itry in range(nrandom):
-    abst = random.uniform(0,2)
-    mX = random.uniform(0.6,2.4)
+    abst = np.random.uniform(0,2)
+    mX = np.random.uniform(0.6,2.4)
     h = ana.get_model1_moments(mX, abst)
     rvector0 = Kinv @ h
     rho0 = ana.get_model1_rmatrix(rvector=rvector0)
@@ -372,14 +371,14 @@ def fiddle(nrandom=1000, truestart=0, kind=0, N=0):
         minsetsize, "members, top anticommuting set size",
         max([len(aset) for aset in foundsets]))
 
-def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
+def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=10000, interactive=1):
   Kinv = get_Kpseudoinverse()
   sigma = get_SUNgenerators(kind=kind)
   nsigma = len(sigma)
   N = Ksigma[0].shape[0]
   for itry in range(nrandom):
-    abst = random.uniform(0,2)
-    mX = random.uniform(0.6,2.4)
+    abst = np.random.uniform(0,2)
+    mX = np.random.uniform(0.6,2.4)
     h = ana.get_model1_moments(mX, abst)
     rvector0 = Kinv @ h
     rho0 = ana.get_model1_rmatrix(rvector=rvector0)
@@ -390,6 +389,9 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
     nalpha = nsigma - 1
     alpha = np.zeros([nalpha], dtype=float)
     agoal = np.zeros([nalpha], dtype=float)
+    domega = np.zeros([nalpha], dtype=float)
+
+    # select a starting point for the solution
     for i in range(nalpha):
       agoal[i] = 2 * np.real(np.trace(sigma[i] @ truerho))
     if truestart:
@@ -405,51 +407,69 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
     except:
       sigma_kind = kind
       d,f = get_SUNtensors(sigma)
-    direction = 1
-    lookback = 10000000
-    redirects = [0] * lookback
-    distances = [0] * lookback
-    axes = [i for i in range(207, nalpha)]
-    goals = [i for i in range(207, nalpha)]
-    domegas = np.zeros([lookback, nalpha], dtype=float)
-    domega = np.zeros([nalpha], dtype=float)
+
+    # record of iteration loop variables
+    redirects = [0] * niter
+    distances = [0] * niter
+    alphas = [0] * niter
+    domegas = [0] * niter
+    exp_fdomegas = [0] * niter
+
+    # select a set of axes for domega and goals for dalpha
+    if len(goals) == 0:
+      goals = [i for i in range(207, nalpha)]
+    if len(axes) == 0:
+      axes = [i for i in range(207, nalpha)]
     frozen_axes = False
     fixed_axes = []
-    for itry in range(niter):
-      rho = (np.diag(np.ones([N], dtype=complex) * tracerho0 / N) +
-             np.einsum('i,ijk', alpha, sigma[:nalpha]))
+    direction = 1
+    maxdomega = 1
+
+    # evolve from start toward goal by unconstrained steepest descent
+    istep = -1
+    istop = 100
+    while istep < niter-1:
+      istep += 1
+      alphas[istep] = np.array(alpha)
       dgoal = agoal[goals] - alpha[goals]
+      for i in wgoals:
+        dgoal[i] *= wgoals[i]
       distance = np.linalg.norm(dgoal)
-      distances[itry % lookback] = distance
-      normalpha = np.linalg.norm(alpha)
+      distances[istep] = distance
       normdomega = np.linalg.norm(domega)
       if normdomega < 1e-6:
+        falpha = np.einsum('ijk,k', f, alpha)
         if not frozen_axes:
-          jacob = np.einsum('i,ijk', alpha, f[:,goals][:,:,axes])
+          jacob = falpha[goals][:,axes]
           jacou,jacoe,jacovt = np.linalg.svd(jacob)
         jacoeinv = np.zeros(jacob.T.shape, dtype=float)
+        nonzeros = 0
         for i in range(len(jacoe)):
           if i in fixed_axes:
             continue
           elif jacoe[i] > 1e-4:
             jacoeinv[i,i] = 1/jacoe[i]
+            nonzeros += 1
           elif jacoe[i] > 1e-8:
             jacoeinv[i,i] = 1/jacoe[i]**0.5
+            nonzeros += 0.1
           elif i == 0:
             jacoeinv[i,i] = 1
+            nonzeros += 0.01
           else:
             jacoeinv[i,i] = 0.01
+            nonzeros += 0.001
+        print(f"jacobian has {nonzeros} free axes")
         domega = np.zeros([nalpha], dtype=float)
         domega[axes] = -np.real(jacovt.T @ jacoeinv @ jacou.T @ dgoal)
         domega *= direction
         normdomega = np.linalg.norm(domega)
-      if normdomega > 1:
-        dostep = np.real(domega) / normdomega
+      if normdomega > maxdomega:
+        dostep = np.real(domega) * (maxdomega/normdomega)
       else:
         dostep = np.real(domega)
-      domegas[itry % lookback] = np.zeros([nalpha], dtype=float)
-      domegas[itry % lookback] = dostep
-      fdostep = np.einsum('ijk,k', f, dostep)
+      domegas[istep] = np.array(dostep)
+      fdomega = np.einsum('ijk,k', f, dostep)
       def expm(m, prec=1e-20):
         result = np.diag(np.ones(m.shape[0], dtype=complex))
         mscale = np.linalg.norm(m)
@@ -478,18 +498,27 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
             result = result @ results[n]
             nsteps -= n
         return result
-      #dalpha = scipy.linalg.expm(fdostep_product) @ alpha - alpha
-      exp_fdostep = expm(fdostep)
-      dalpha = exp_fdostep @ alpha - alpha
-      print("|rank1|,|alpha|,|dalpha|,|domega|,|dostep|,|alpha-truealpha|,dist=",
-            f"{np.linalg.norm(tracerho0 * rho - rho @ rho):12.6e}",
-            f"{np.real(normalpha) / tracerho0:18.15f}",
-            f"{np.linalg.norm(dalpha):9.6f}",
-            f"{np.linalg.norm(domega):9.6f}",
-            f"{np.linalg.norm(dostep):9.6f}",
-            f"{np.linalg.norm(alpha-agoal):9.6f}",
-            f"{distance}")
-      now = itry % lookback
+      exp_fdomega = expm(fdomega)
+      exp_fdomegas[istep] = np.array(exp_fdomega)
+      dalpha = (exp_fdomega @ alpha) - alpha
+
+      # print summary information for this step
+      def print_step_info(step, alpha, dalpha, domega, dostep, distance):
+        rho = (np.diag(np.ones([N], dtype=complex) * tracerho0 / N) +
+               np.einsum('i,ijk', alpha, sigma[:nalpha]))
+        normalpha = np.linalg.norm(alpha)
+        print(f"{step}: |rank1|,|alpha|,|dalpha|,|domega|," +
+                       "|dostep|,|rho-truerho|,dist=",
+              f"{np.linalg.norm(tracerho0 * rho - rho @ rho):12.6e}",
+              f"{np.real(normalpha) / tracerho0:18.15f}",
+              f"{np.linalg.norm(dalpha):9.6f}",
+              f"{np.linalg.norm(domega):9.6f}",
+              f"{np.linalg.norm(dostep):9.6f}",
+              f"{np.linalg.norm(rho-truerho):9.6f}",
+              f"{distance}")
+      print_step_info(istep, alpha, dalpha, domega, dostep, distance)
+ 
+      # allow user opportunity for inspection
       if interactive:
         ans = input("r to restart, i to inspect, c to continue, q to quit:")
         if ans == 'r':
@@ -499,16 +528,18 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
             alpha[i] = 2 * np.real(np.trace(sigma[i] @ rho1))
           continue
         elif ans == 'c':
-          if now > 1:
-            redirects[now-1] = 1
+          if istep > 1:
+            redirects[istep-1] = 1
           interactive = False
         elif ans == 'q':
           break
         elif ans == 'i':
+          rho = (np.diag(np.ones([N], dtype=complex) * tracerho0 / N) +
+                 np.einsum('i,ijk', alpha, sigma[:nalpha]))
           print("|rho - truerho| =", np.linalg.norm(rho - truerho))
-          one = np.diag(np.ones(fdostep.shape[0], dtype=complex))
-          print("|exp_fdostep * exp_fdostep.T - 1| =", np.linalg.norm(exp_fdostep @ exp_fdostep.T - one))
-          print("exp_fdostep =\n", np.round(np.real(exp_fdostep), 6))
+          one = np.diag(np.ones(fdomega.shape[0], dtype=complex))
+          print("|exp_fdomega * exp_fdomega.T - 1| =", np.linalg.norm(exp_fdomega @ exp_fdomega.T - one))
+          print("exp_fdomega =\n", np.round(np.real(exp_fdomega), 6))
           print(len(axes), "axes:", axes)
           print(len(goals), "goals:", goals)
           print("jacou.T @ dgoal =\n", np.round(np.real(jacou.T @ dgoal), 6))
@@ -516,9 +547,56 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
           print("jacovt @ alpha=\n", np.round(np.real(jacovt @ alpha[axes]), 6)[:min([len(axes), 56])])
           print("jacovt @ agoal=\n", np.round(np.real(jacovt @ agoal[axes]), 6)[:min([len(axes), 56])])
           while True:
-            ans = input("dial:angle/+/-/f/s/q? ")
+            ans = input("<dial>:<angle>/r:<step>=<max>/w:<goal>=<w>/+/-/f/s/q? ")
             try:
-              if len(ans) > 0 and ans[0] == 'f':
+              if len(ans) > 0 and ans[:2] == 'w:':
+                sans = ans[2:].split('=')
+                goal = int(sans[0])
+                wgoals[goal] = float(sans[1])
+                print(f"wgoals[{goal}]={wgoals[goal]}")
+                continue
+              elif len(ans) > 0 and ans[:2] == 'r:':
+                sans = ans[2:].split('=')
+                jstep = int(sans[0])
+                maxdomega = float(sans[1])
+                print(f"back to step {jstep}, maximum step size {maxdomega}")
+                trial_dalpha = alphas[jstep] - alpha
+                istep = jstep - 1
+                trial_domega = 0
+                continue
+                trial_alpha = alphas[jstep]
+                trial_falpha = np.einsum('ijk,k', f, trial_alpha)
+                for j in range(jstep, istep):
+                  trial_falpha = exp_fdomegas[j] @ trial_falpha
+                jack = trial_falpha[goals]
+                jacku,jacke,jackvt = np.linalg.svd(jack)
+                jackeinv = np.zeros(jack.T.shape, dtype=float)
+                for i in range(len(jacke)):
+                  if jacke[i] > 1e-8:
+                    jackeinv[i,i] = 1/jacke[i]
+                  elif jacke[i] > 1e-12:
+                    jackeinv[i,i] = 1/jacke[i]**0.5
+                  else:
+                    jackeinv[i,i] = 1
+                trial_domega = -np.real(jackvt.T @ jackeinv @ jacku.T @ dgoal)
+                trial_domega = np.random.uniform(-0.1, 0.1, [nalpha])
+                print("|dgoal|,|domega|,|jack @ domega|=",
+                      np.linalg.norm(dgoal), np.linalg.norm(trial_domega),
+                      np.linalg.norm(jack @ trial_domega))
+                trial_dalpha = np.einsum('ijk,k', f, trial_domega)
+                trial_alpha = expm(trial_dalpha) @ trial_alpha
+                for j in range(jstep, istep+1):
+                  trial_dgoal = agoal[goals] - trial_alpha[goals]
+                  for i in wgoals:
+                    trial_dgoal[i] *= wgoals[i]
+                  distance = np.linalg.norm(trial_dgoal)
+                  print_step_info(j, trial_alpha, trial_alpha - alphas[j],
+                                  domegas[j], domegas[j], distance)
+                  trial_alpha = exp_fdomegas[j] @ trial_alpha
+                alpha = np.array(alphas[istep])
+                domega = np.array(domegas[istep])
+                continue
+              elif len(ans) > 0 and ans[0] == 'f':
                 try:
                   axis = int(ans[1:])
                   if axis in fixed_axes:
@@ -585,9 +663,11 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
             trial_rho = (np.diag(np.ones([N], dtype=complex) * tracerho0 / N) +
                          np.einsum('i,ijk', trial_alpha, sigma[:nalpha]))
             trial_dgoal = agoal[goals] - trial_alpha[goals]
+            for i in wgoals:
+              trial_dgoal[i] *= wgoals[i]
             trial_distance = np.linalg.norm(trial_dgoal)
             trial_normalpha = np.linalg.norm(trial_alpha)
-            one = np.diag(np.ones(fdostep.shape[0], dtype=complex))
+            one = np.diag(np.ones(fdomega.shape[0], dtype=complex))
             print("|exp_fdomega - 1| =",
                   f"{np.linalg.norm(trial_exp_fdomega - one)}")
             print("|rank1|,|alpha|,|dalpha|,|domega|,|alpha-truealpha|,dist=",
@@ -595,35 +675,40 @@ def explore(nrandom=1, kind=0, truestart=0, niter=1000000000, interactive=1):
                   f"{np.real(trial_normalpha) / tracerho0:18.15f}",
                   f"{np.linalg.norm(trial_dalpha):9.6f}",
                   f"{np.linalg.norm(trial_domega):9.6f}",
-                  f"{np.linalg.norm(trial_alpha - agoal):9.6f}",
+                  f"{np.linalg.norm(trial_alpha-agoal):9.6f}",
                   f"{trial_distance}")
         domega -= dostep
       else:
         domega *= 0
+
+      # advance until convergence or some exception occurs
       alpha = alpha + dalpha
-      redirects[now] = 0
-      if now > 5:
-        if sum([redirects[i] for i in range(now-5, now)]) > 0:
+      redirects[istep] = 0
+      if istep > 10:
+        if sum([redirects[i] for i in range(istep-10, istep)]) > 0:
           continue
-        elif sum([distances[i+1] > distances[i] for i in range(now-5, now)]) == 5:
+        elif sum([distances[i+1] > distances[i] for i in range(istep-10, istep)]) == 10:
           print("******WARNING******* ", end="")
           print("regressing, try reversing direction")
-          redirects[now] = 1
-          direction *= -1
-          interactive = 1
+          ans = input("[y]?")
+          if len(ans) == 0 or ans[0] == 'y':
+            redirects[istep] = 1
+            direction *= -1
+            interactive = 1
           continue
-      if now > 10:
-        if abs(distances[now] / distances[now-10] - 1) < 1e-9:
-          if abs(distances[now]) < 1e-10:
+      if istep > 10:
+        if np.linalg.norm(alphas[istep] - alphas[istep-10]) < 1e-6:
+          if abs(distances[istep]) < 1e-10:
             break
           print("******WARNING******* ", end="")
-          print("stagnated, let's go interactive")
+          print("converged, let's go interactive")
           interactive = 1
           continue
-        elif sum([np.linalg.norm(domegas[i+1] - domegas[i]) for i in range(now-10, now)]) < 1e-9:
+      if istep > istop:
           print("******WARNING******* ", end="")
           print("cycling, let's go interactive")
           interactive = 1
+          istop += 100
           continue
       
   rho = np.diag(np.ones([N], dtype=complex) * tracerho0/N)
