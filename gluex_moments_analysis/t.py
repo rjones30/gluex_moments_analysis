@@ -550,7 +550,7 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
           print("jacovt @ agoal=\n", np.round(np.real(jacovt @ agoal[axes]), 6)[:min([len(axes), 56])])
           while True:
             ans = input("<dial>:<angle>/r:<step>=<max>/w:<goal>=<w>/F:<axis>/D:<axis>/R/+/-/f/s/q? ")
-            if True: #try:
+            try:
               if ans == 'R':
                 rho1 = np.array(np.diag(np.random.uniform(0, 1, [N])), dtype=complex)
                 for j in range(1, N):
@@ -639,7 +639,7 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
                   for j in range(255):
                     D[i,j*255:(j+1)*255] = d[i,j,:]
                 print("running svd on D", D.shape)
-                Du,De,Dvt = np.linalg.svd(D)
+                De = np.linalg.svd(D, full_matrices=False, compute_uv=False)
                 print(f"D has eigenvalues:", np.round(np.real(De), 10))
                 continue
               elif len(ans) > 0 and ans[0] == 'f':
@@ -686,7 +686,7 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
               sans = ans.split(':')
               dial = int(sans[0])
               angle = float(sans[1])
-            else: #except:
+            except:
               if ans == 's':
                 dalpha = trial_dalpha
                 domega = trial_domega
