@@ -549,8 +549,8 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
           print("jacovt @ alpha=\n", np.round(np.real(jacovt @ alpha[axes]), 6)[:min([len(axes), 56])])
           print("jacovt @ agoal=\n", np.round(np.real(jacovt @ agoal[axes]), 6)[:min([len(axes), 56])])
           while True:
-            ans = input("<dial>:<angle>/r:<step>=<max>/w:<goal>=<w>/F:<axis>/R/+/-/f/s/q? ")
-            try:
+            ans = input("<dial>:<angle>/r:<step>=<max>/w:<goal>=<w>/F:<axis>/D:<axis>/R/+/-/f/s/q? ")
+            if True: #try:
               if ans == 'R':
                 rho1 = np.array(np.diag(np.random.uniform(0, 1, [N])), dtype=complex)
                 for j in range(1, N):
@@ -574,7 +574,7 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
                 wgoals[goal] = float(sans[1])
                 print(f"wgoals[{goal}]={wgoals[goal]}")
                 continue
-              elif len(ans) > 0 and ans[:2] == 'r:':
+              elif len(ans) > 2 and ans[:2] == 'r:':
                 sans = ans[2:].split('=')
                 jstep = int(sans[0])
                 maxdomega = float(sans[1])
@@ -616,7 +616,7 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
                 domega = np.array(domegas[istep])
                 """
                 continue
-              elif len(ans) > 0 and ans[:2] == 'F:':
+              elif len(ans) > 2 and ans[:2] == 'F:':
                 axis = int(ans[2:])
                 Fk = np.einsum('ijk,k',f[:,:,axes], jacovt[axis,:])
                 Fk = jacou.T @ Fk[goals,:][:,goals] @ jacou
@@ -629,6 +629,18 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
                 h2.SetStats(0)
                 h2.Draw("colz")
                 ROOT.gROOT.FindObject("c1").Update()
+                continue
+              elif len(ans) > 2 and ans[:2] == 'D:':
+                axis = int(ans[2:])
+                de,du = np.linalg.eigh(d[:,:,axis])
+                print(f"d[{axis}] has eigenvalues:", np.round(np.real(de), 10))
+                D = np.zeros([255, 255*255], dtype=float)
+                for i in range(255):
+                  for j in range(255):
+                    D[i,j*255:(j+1)*255] = d[i,j,:]
+                print("running svd on D", D.shape)
+                Du,De,Dvt = np.linalg.svd(D)
+                print(f"D has eigenvalues:", np.round(np.real(De), 10))
                 continue
               elif len(ans) > 0 and ans[0] == 'f':
                 try:
@@ -674,7 +686,7 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
               sans = ans.split(':')
               dial = int(sans[0])
               angle = float(sans[1])
-            except:
+            else: #except:
               if ans == 's':
                 dalpha = trial_dalpha
                 domega = trial_domega
