@@ -1,6 +1,7 @@
 import gluex_moments_analysis.analyzeMomentsMatrix as ana
 import numpy as np
 import scipy
+import ROOT
 
 def get_Kmatrix():
   global Kmatrix
@@ -414,6 +415,7 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
     alphas = [0] * niter
     domegas = [0] * niter
     exp_fdomegas = [0] * niter
+    convergents = {}
 
     # select a set of axes for domega and goals for dalpha
     if len(goals) == 0:
@@ -547,9 +549,26 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
           print("jacovt @ alpha=\n", np.round(np.real(jacovt @ alpha[axes]), 6)[:min([len(axes), 56])])
           print("jacovt @ agoal=\n", np.round(np.real(jacovt @ agoal[axes]), 6)[:min([len(axes), 56])])
           while True:
-            ans = input("<dial>:<angle>/r:<step>=<max>/w:<goal>=<w>/+/-/f/s/q? ")
+            ans = input("<dial>:<angle>/r:<step>=<max>/w:<goal>=<w>/F:<axis>/R/+/-/f/s/q? ")
             try:
-              if len(ans) > 0 and ans[:2] == 'w:':
+              if ans == 'R':
+                rho1 = np.array(np.diag(np.random.uniform(0, 1, [N])), dtype=complex)
+                for j in range(1, N):
+                  rho1[0,j] = np.random.uniform(-1, 1) + np.random.uniform(-1, 1) * 1j
+                  rho1[0,j] *= (rho1[0,0] * rho1[j,j])**0.5 / np.abs(rho1[0,j])
+                for i in range(1, N):
+                  for j in range(0, i):
+                    rho1[i,j] = np.conjugate(rho1[j,i])
+                  for j in range(i+1, N):
+                    rho1[i,j] = rho1[i,i] * rho1[0,j] / rho1[0,i]
+                rho1 *= tracerho0 / np.trace(rho1)
+                for i in range(nalpha):
+                  alpha[i] = 2 * np.real(np.trace(sigma[i] @ rho1))
+                dalpha *= 0
+                domega *= 0
+                istep = -1
+                break
+              elif len(ans) > 0 and ans[:2] == 'w:':
                 sans = ans[2:].split('=')
                 goal = int(sans[0])
                 wgoals[goal] = float(sans[1])
@@ -563,7 +582,7 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
                 trial_dalpha = alphas[jstep] - alpha
                 istep = jstep - 1
                 trial_domega = 0
-                continue
+                """
                 trial_alpha = alphas[jstep]
                 trial_falpha = np.einsum('ijk,k', f, trial_alpha)
                 for j in range(jstep, istep):
@@ -595,6 +614,21 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
                   trial_alpha = exp_fdomegas[j] @ trial_alpha
                 alpha = np.array(alphas[istep])
                 domega = np.array(domegas[istep])
+                """
+                continue
+              elif len(ans) > 0 and ans[:2] == 'F:':
+                axis = int(ans[2:])
+                Fk = np.einsum('ijk,k',f[:,:,axes], jacovt[axis,:])
+                Fk = jacou.T @ Fk[goals,:][:,goals] @ jacou
+                print(f"|F[axis={axis}]|=", np.linalg.norm(Fk))
+                h2 = ROOT.TH2D("h2", f"F rotation matrix for axis {axis}",
+                               48, 0, 48, 48, 0, 48)
+                for i in range(48):
+                  for j in range(48):
+                    h2.SetBinContent(i, j, np.real(Fk[i,j]))
+                h2.SetStats(0)
+                h2.Draw("colz")
+                ROOT.gROOT.FindObject("c1").Update()
                 continue
               elif len(ans) > 0 and ans[0] == 'f':
                 try:
@@ -698,10 +732,34 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
           continue
       if istep > 10:
         if np.linalg.norm(alphas[istep] - alphas[istep-10]) < 1e-6:
-          if abs(distances[istep]) < 1e-10:
-            break
+          #if abs(distances[istep]) < 1e-10:
+          #  break
           print("******WARNING******* ", end="")
           print("converged, let's go interactive")
+          rho = np.diag(np.ones([N], dtype=complex) * tracerho0/N)
+          for i in range(nalpha):
+            rho += alpha[i] * sigma[i]
+          dg = np.linalg.norm(rho - truerho)
+          found = 0
+          for dist in convergents:
+            gdist = convergents[dist]['gdist']
+            n = convergents[dist]['repeats']
+            if abs(distances[istep] - dist) < 1e-6 and abs(gdist - dg) < 1e-6:
+               print(f"repeat {n} of fixed point at distance={dist},",
+                     f"distgoal={gdist}")
+               convergents[dist]['repeats'] += 1
+               found = 1
+               break
+          if not found:
+             n = len(convergents)
+             dist = distances[istep]
+             print(f"new fixed point {n} at distance={dist},",
+                   f"distgoal={dg}")
+             convergents[dist] = {}
+             convergents[dist]['repeats'] = 1
+             convergents[dist]['gdist'] = dg
+             convergents[dist]['rho'] = np.array(rho)
+             convergents[dist]['alpha'] = np.array(alpha)
           interactive = 1
           continue
       if istep > istop:
@@ -716,3 +774,4 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
     rho += alpha[i] * sigma[i]
   print("final difference: ", np.linalg.norm(rho - truerho))
   print("final rank-1 check: |R rho - rho @ rho| is ", np.linalg.norm(tracerho0 * rho - rho @ rho))
+  return convergents
