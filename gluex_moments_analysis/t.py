@@ -2,6 +2,7 @@ import gluex_moments_analysis.analyzeMomentsMatrix as ana
 import numpy as np
 import scipy
 import ROOT
+import pickle as pkl
 
 def get_Kmatrix():
   global Kmatrix
@@ -539,6 +540,12 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
           rho = (np.diag(np.ones([N], dtype=complex) * tracerho0 / N) +
                  np.einsum('i,ijk', alpha, sigma[:nalpha]))
           print("|rho - truerho| =", np.linalg.norm(rho - truerho))
+          rhot = applyT(rho)
+          alphat = np.zeros([nalpha], dtype=float)
+          for i in range(nalpha):
+            alphat[i] = 2 * np.real(np.trace(sigma[i] @ rhot))
+          print("|alphat - alpha| =", np.linalg.norm(alphat - alpha))
+          print("|alphat[goals] - alpha[goals]| =", np.linalg.norm(alphat[goals] - alpha[goals]))
           one = np.diag(np.ones(fdomega.shape[0], dtype=complex))
           print("|exp_fdomega * exp_fdomega.T - 1| =", np.linalg.norm(exp_fdomega @ exp_fdomega.T - one))
           print("exp_fdomega =\n", np.round(np.real(exp_fdomega), 6))
@@ -546,12 +553,18 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
           print(len(goals), "goals:", goals)
           print("jacou.T @ dgoal =\n", np.round(np.real(jacou.T @ dgoal), 6))
           print("jacoe=\n", np.round(jacoe, 6))
-          print("jacovt @ alpha=\n", np.round(np.real(jacovt @ alpha[axes]), 6)[:min([len(axes), 56])])
-          print("jacovt @ agoal=\n", np.round(np.real(jacovt @ agoal[axes]), 6)[:min([len(axes), 56])])
           while True:
-            ans = input("<dial>:<angle>/r:<step>=<max>/w:<goal>=<w>/F:<axis>/D:<axis>/R/+/-/f/s/q? ")
+            ans = input("<dial>:<angle>/r:<step>=<max>/w:<goal>=<w>/F:<axis>/D:<axis>/T/R/+/-/f/s/q? ")
             try:
-              if ans == 'R':
+              if ans == 'T':
+                rhot = applyT(rho)
+                for i in range(nalpha):
+                  alpha[i] = 2 * np.real(np.trace(sigma[i] @ rhot))
+                dalpha *= 0
+                domega *= 0
+                istep = -1
+                break
+              elif ans == 'R':
                 rho1 = np.array(np.diag(np.random.uniform(0, 1, [N])), dtype=complex)
                 for j in range(1, N):
                   rho1[0,j] = np.random.uniform(-1, 1) + np.random.uniform(-1, 1) * 1j
@@ -787,3 +800,25 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
   print("final difference: ", np.linalg.norm(rho - truerho))
   print("final rank-1 check: |R rho - rho @ rho| is ", np.linalg.norm(tracerho0 * rho - rho @ rho))
   return convergents
+
+def applyT(rho, LM=[]):
+  if len(LM) == 0:
+    LM = [[1,1], [2,1], [2,2], [3,1], [3,2], [3,3]]
+  rhot = np.conjugate(rho)
+  Lmax = int(rho.shape[0]**0.5) - 1
+  for L,M in LM:
+    n = nplus = nmminus = -1
+    for l in range(Lmax+1):
+      for m in range(-l, l+1):
+        n += 1
+        if l == L and m == -M:
+          nminus = n
+        elif l == L and m == M:
+          nplus = n
+    if nplus < 1 or nminus < 1:
+      print(f"error in applyT - bad combination LM = [{L},{M}], apply failed")
+      return rhot
+    msign = (-1)**M
+    rhot[[nplus,nminus],:] = rhot[[nminus,nplus],:] * (-1)**M
+    rhot[:,[nplus,nminus]] = rhot[:,[nminus,nplus]] * (-1)**M
+  return rhot
