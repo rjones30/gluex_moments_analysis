@@ -373,7 +373,8 @@ def fiddle(nrandom=1000, truestart=0, kind=0, N=0):
         minsetsize, "members, top anticommuting set size",
         max([len(aset) for aset in foundsets]))
 
-def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=10000, interactive=1):
+def explore(nrandom=1, kind=0, truestart=0, axes=[], 
+            goals=[], goals_metric=[], niter=10000, interactive=1):
   Kinv = get_Kpseudoinverse()
   sigma = get_SUNgenerators(kind=kind)
   nsigma = len(sigma)
@@ -421,8 +422,10 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
     # select a set of axes for domega and goals for dalpha
     if len(goals) == 0:
       goals = [i for i in range(207, nalpha)]
+    if len(goals_metric) == 0:
+      goals_metric = np.diag(np.ones([len(goals)], dtype=float))
     if len(axes) == 0:
-      axes = [i for i in range(207, nalpha)]
+      axes = [i for i in range(nalpha)]
     frozen_axes = False
     fixed_axes = []
     direction = 1
@@ -434,16 +437,14 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
     while istep < niter-1:
       istep += 1
       alphas[istep] = np.array(alpha)
-      dgoal = agoal[goals] - alpha[goals]
-      for i in wgoals:
-        dgoal[i] *= wgoals[i]
+      dgoal = goals_metric @ (agoal[goals] - alpha[goals])
       distance = np.linalg.norm(dgoal)
       distances[istep] = distance
       normdomega = np.linalg.norm(domega)
       if normdomega < 1e-6:
         falpha = np.einsum('ijk,k', f, alpha)
         if not frozen_axes:
-          jacob = falpha[goals][:,axes]
+          jacob = goals_metric @ falpha[goals][:,axes]
           jacou,jacoe,jacovt = np.linalg.svd(jacob)
         jacoeinv = np.zeros(jacob.T.shape, dtype=float)
         nonzeros = 0
@@ -545,7 +546,8 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
           for i in range(nalpha):
             alphat[i] = 2 * np.real(np.trace(sigma[i] @ rhot))
           print("|alphat - alpha| =", np.linalg.norm(alphat - alpha))
-          print("|alphat[goals] - alpha[goals]| =", np.linalg.norm(alphat[goals] - alpha[goals]))
+          print("|alphat[goals] - alpha[goals]| =", 
+                np.linalg.norm(goals_metric @ (alphat[goals] - alpha[goals])))
           one = np.diag(np.ones(fdomega.shape[0], dtype=complex))
           print("|exp_fdomega * exp_fdomega.T - 1| =", np.linalg.norm(exp_fdomega @ exp_fdomega.T - one))
           print("exp_fdomega =\n", np.round(np.real(exp_fdomega), 6))
@@ -554,7 +556,7 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
           print("jacou.T @ dgoal =\n", np.round(np.real(jacou.T @ dgoal), 6))
           print("jacoe=\n", np.round(jacoe, 6))
           while True:
-            ans = input("<dial>:<angle>/r:<step>=<max>/w:<goal>=<w>/F:<axis>/D:<axis>/T/R/+/-/f/s/q? ")
+            ans = input("<dial>:<angle>/r:<step>=<max>/F:<axis>/D:<axis>/T/R/+/-/f/s/q? ")
             try:
               if ans == 'T':
                 rhot = applyT(rho)
@@ -581,12 +583,6 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
                 domega *= 0
                 istep = -1
                 break
-              elif len(ans) > 0 and ans[:2] == 'w:':
-                sans = ans[2:].split('=')
-                goal = int(sans[0])
-                wgoals[goal] = float(sans[1])
-                print(f"wgoals[{goal}]={wgoals[goal]}")
-                continue
               elif len(ans) > 2 and ans[:2] == 'r:':
                 sans = ans[2:].split('=')
                 jstep = int(sans[0])
@@ -595,44 +591,11 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
                 trial_dalpha = alphas[jstep] - alpha
                 istep = jstep - 1
                 trial_domega = 0
-                """
-                trial_alpha = alphas[jstep]
-                trial_falpha = np.einsum('ijk,k', f, trial_alpha)
-                for j in range(jstep, istep):
-                  trial_falpha = exp_fdomegas[j] @ trial_falpha
-                jack = trial_falpha[goals]
-                jacku,jacke,jackvt = np.linalg.svd(jack)
-                jackeinv = np.zeros(jack.T.shape, dtype=float)
-                for i in range(len(jacke)):
-                  if jacke[i] > 1e-8:
-                    jackeinv[i,i] = 1/jacke[i]
-                  elif jacke[i] > 1e-12:
-                    jackeinv[i,i] = 1/jacke[i]**0.5
-                  else:
-                    jackeinv[i,i] = 1
-                trial_domega = -np.real(jackvt.T @ jackeinv @ jacku.T @ dgoal)
-                trial_domega = np.random.uniform(-0.1, 0.1, [nalpha])
-                print("|dgoal|,|domega|,|jack @ domega|=",
-                      np.linalg.norm(dgoal), np.linalg.norm(trial_domega),
-                      np.linalg.norm(jack @ trial_domega))
-                trial_dalpha = np.einsum('ijk,k', f, trial_domega)
-                trial_alpha = expm(trial_dalpha) @ trial_alpha
-                for j in range(jstep, istep+1):
-                  trial_dgoal = agoal[goals] - trial_alpha[goals]
-                  for i in wgoals:
-                    trial_dgoal[i] *= wgoals[i]
-                  distance = np.linalg.norm(trial_dgoal)
-                  print_step_info(j, trial_alpha, trial_alpha - alphas[j],
-                                  domegas[j], domegas[j], distance)
-                  trial_alpha = exp_fdomegas[j] @ trial_alpha
-                alpha = np.array(alphas[istep])
-                domega = np.array(domegas[istep])
-                """
                 continue
               elif len(ans) > 2 and ans[:2] == 'F:':
                 axis = int(ans[2:])
                 Fk = np.einsum('ijk,k',f[:,:,axes], jacovt[axis,:])
-                Fk = jacou.T @ Fk[goals,:][:,goals] @ jacou
+                Fk = jacou.T @ goals_metric @ Fk[goals,:][:,goals] @ jacou
                 print(f"|F[axis={axis}]|=", np.linalg.norm(Fk))
                 h2 = ROOT.TH2D("h2", f"F rotation matrix for axis {axis}",
                                48, 0, 48, 48, 0, 48)
@@ -721,9 +684,7 @@ def explore(nrandom=1, kind=0, truestart=0, goals=[], axes=[], wgoals={}, niter=
             trial_dalpha = trial_alpha - alpha
             trial_rho = (np.diag(np.ones([N], dtype=complex) * tracerho0 / N) +
                          np.einsum('i,ijk', trial_alpha, sigma[:nalpha]))
-            trial_dgoal = agoal[goals] - trial_alpha[goals]
-            for i in wgoals:
-              trial_dgoal[i] *= wgoals[i]
+            trial_dgoal = goals_metric @ (agoal[goals] - trial_alpha[goals])
             trial_distance = np.linalg.norm(trial_dgoal)
             trial_normalpha = np.linalg.norm(trial_alpha)
             one = np.diag(np.ones(fdomega.shape[0], dtype=complex))
