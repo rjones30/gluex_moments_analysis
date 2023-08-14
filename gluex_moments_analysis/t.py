@@ -512,11 +512,12 @@ def explore(nrandom=1, kind=0, truestart=0, axes=[],
                np.einsum('i,ijk', alpha, sigma[:nalpha]))
         normalpha = np.linalg.norm(alpha)
         print(f"{step}: |rank1|,|alpha|,|dalpha|,|domega|," +
-                       "|dostep|,|rho-truerho|,dist=",
+                       "|fdomega|,|dostep|,|rho-truerho|,dist=",
               f"{np.linalg.norm(tracerho0 * rho - rho @ rho):12.6e}",
               f"{np.real(normalpha) / tracerho0:18.15f}",
               f"{np.linalg.norm(dalpha):9.6f}",
               f"{np.linalg.norm(domega):9.6f}",
+              f"{np.linalg.norm(fdomega):9.6f}",
               f"{np.linalg.norm(dostep):9.6f}",
               f"{np.linalg.norm(rho-truerho):9.6f}",
               f"{distance}")
