@@ -414,6 +414,7 @@ def explore(nrandom=1, kind=0, truestart=0, axes=[],
     # record of iteration loop variables
     redirects = [0] * niter
     distances = [0] * niter
+    dgoals = [0] * niter
     alphas = [0] * niter
     domegas = [0] * niter
     exp_fdomegas = [0] * niter
@@ -423,7 +424,9 @@ def explore(nrandom=1, kind=0, truestart=0, axes=[],
     if len(goals) == 0:
       goals = [i for i in range(207, nalpha)]
     if len(goals_metric) == 0:
-      goals_metric = np.diag(np.ones([len(goals)], dtype=float))
+      norm2goals = np.linalg.norm(agoal[goals], ord=2)
+      goals_metric = np.diag(np.array([400 / norm2goals] * len(goals), dtype=float))
+      agoal[goals] = np.random.normal(agoal[goals], np.diag(1/goals_metric**0.5))
     if len(axes) == 0:
       axes = [i for i in range(nalpha)]
     frozen_axes = False
@@ -437,24 +440,25 @@ def explore(nrandom=1, kind=0, truestart=0, axes=[],
     while istep < niter-1:
       istep += 1
       alphas[istep] = np.array(alpha)
-      dgoal = goals_metric @ (agoal[goals] - alpha[goals])
-      distance = np.linalg.norm(dgoal)
+      dgoal = agoal[goals] - alpha[goals]
+      distance = np.abs(dgoal @ goals_metric @ dgoal)
       distances[istep] = distance
+      dgoals[istep] = np.linalg.norm(dgoal)
       normdomega = np.linalg.norm(domega)
       if normdomega < 1e-6:
         falpha = np.einsum('ijk,k', f, alpha)
         if not frozen_axes:
-          jacob = goals_metric @ falpha[goals][:,axes]
+          jacob = falpha[goals][:,axes]
           jacou,jacoe,jacovt = np.linalg.svd(jacob)
         jacoeinv = np.zeros(jacob.T.shape, dtype=float)
         nonzeros = 0
         for i in range(len(jacoe)):
           if i in fixed_axes:
             continue
-          elif jacoe[i] > 1e-4:
+          elif jacoe[i] > 1e-5:
             jacoeinv[i,i] = 1/jacoe[i]
             nonzeros += 1
-          elif jacoe[i] > 1e-8:
+          elif jacoe[i] > 1e-10:
             jacoeinv[i,i] = 1/jacoe[i]**0.5
             nonzeros += 0.1
           elif i == 0:
@@ -546,9 +550,10 @@ def explore(nrandom=1, kind=0, truestart=0, axes=[],
           alphat = np.zeros([nalpha], dtype=float)
           for i in range(nalpha):
             alphat[i] = 2 * np.real(np.trace(sigma[i] @ rhot))
-          print("|alphat - alpha| =", np.linalg.norm(alphat - alpha))
+          dalphat = alphat - alpha
+          print("|alphat - alpha| =", np.linalg.norm(dalphat))
           print("|alphat[goals] - alpha[goals]| =", 
-                np.linalg.norm(goals_metric @ (alphat[goals] - alpha[goals])))
+                dalphat[goals] @ goals_metric @ dalphat[goals])
           one = np.diag(np.ones(fdomega.shape[0], dtype=complex))
           print("|exp_fdomega * exp_fdomega.T - 1| =", np.linalg.norm(exp_fdomega @ exp_fdomega.T - one))
           print("exp_fdomega =\n", np.round(np.real(exp_fdomega), 6))
@@ -596,7 +601,7 @@ def explore(nrandom=1, kind=0, truestart=0, axes=[],
               elif len(ans) > 2 and ans[:2] == 'F:':
                 axis = int(ans[2:])
                 Fk = np.einsum('ijk,k',f[:,:,axes], jacovt[axis,:])
-                Fk = jacou.T @ goals_metric @ Fk[goals,:][:,goals] @ jacou
+                Fk = jacou.T @ Fk[goals,:][:,goals] @ jacou
                 print(f"|F[axis={axis}]|=", np.linalg.norm(Fk))
                 h2 = ROOT.TH2D("h2", f"F rotation matrix for axis {axis}",
                                48, 0, 48, 48, 0, 48)
@@ -685,8 +690,8 @@ def explore(nrandom=1, kind=0, truestart=0, axes=[],
             trial_dalpha = trial_alpha - alpha
             trial_rho = (np.diag(np.ones([N], dtype=complex) * tracerho0 / N) +
                          np.einsum('i,ijk', trial_alpha, sigma[:nalpha]))
-            trial_dgoal = goals_metric @ (agoal[goals] - trial_alpha[goals])
-            trial_distance = np.linalg.norm(trial_dgoal)
+            trial_dgoal = agoal[goals] - trial_alpha[goals]
+            trial_distance = np.abs(trial_dgoal @ goals_metric @ trial_dgoal)
             trial_normalpha = np.linalg.norm(trial_alpha)
             one = np.diag(np.ones(fdomega.shape[0], dtype=complex))
             print("|exp_fdomega - 1| =",
@@ -708,19 +713,17 @@ def explore(nrandom=1, kind=0, truestart=0, axes=[],
       if istep > 10:
         if sum([redirects[i] for i in range(istep-10, istep)]) > 0:
           continue
-        elif sum([distances[i+1] > distances[i] for i in range(istep-10, istep)]) == 10:
+        elif sum([dgoals[i+1] > dgoals[i] * 1.00001 for i in range(istep-10, istep)]) == 10:
           print("******WARNING******* ", end="")
           print("regressing, try reversing direction")
-          ans = input("[y]?")
-          if len(ans) == 0 or ans[0] == 'y':
+          ans = input("[n]?")
+          if len(ans) > 0 and ans[0] == 'y':
             redirects[istep] = 1
             direction *= -1
-            interactive = 1
+          interactive = 1
           continue
-      if istep > 10:
-        if np.linalg.norm(alphas[istep] - alphas[istep-10]) < 1e-6:
-          #if abs(distances[istep]) < 1e-10:
-          #  break
+      if istep > 3:
+        if np.linalg.norm(alphas[istep] - alphas[istep-3]) < 1e-6:
           print("******WARNING******* ", end="")
           print("converged, let's go interactive")
           rho = np.diag(np.ones([N], dtype=complex) * tracerho0/N)
@@ -731,22 +734,24 @@ def explore(nrandom=1, kind=0, truestart=0, axes=[],
           for dist in convergents:
             gdist = convergents[dist]['gdist']
             n = convergents[dist]['repeats']
+            i = convergents[dist]['serial']
             if abs(distances[istep] - dist) < 1e-6 and abs(gdist - dg) < 1e-6:
-               print(f"repeat {n} of fixed point at distance={dist},",
+               print(f"repeat {n} of fixed point {i} at distance={dist},",
                      f"distgoal={gdist}")
                convergents[dist]['repeats'] += 1
                found = 1
                break
           if not found:
-             n = len(convergents)
+             i = len(convergents)
              dist = distances[istep]
-             print(f"new fixed point {n} at distance={dist},",
+             print(f"new fixed point {i} at distance={dist},",
                    f"distgoal={dg}")
              convergents[dist] = {}
              convergents[dist]['repeats'] = 1
              convergents[dist]['gdist'] = dg
              convergents[dist]['rho'] = np.array(rho)
              convergents[dist]['alpha'] = np.array(alpha)
+             convergents[dist]['serial'] = i
           interactive = 1
           continue
       if istep > istop:
