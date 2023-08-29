@@ -732,13 +732,19 @@ def explore(nrandom=1, kind=0, truestart=0, axes=[],
           dg = np.linalg.norm(rho - truerho)
           found = 0
           for dist in convergents:
-            gdist = convergents[dist]['gdist']
+            gdist = convergents[dist]['gdist'][0]
             n = convergents[dist]['repeats']
             i = convergents[dist]['serial']
             if abs(distances[istep] - dist) < 1e-6 and abs(gdist - dg) < 1e-6:
                print(f"repeat {n} of fixed point {i} at distance={dist},",
                      f"distgoal={gdist}")
                convergents[dist]['repeats'] += 1
+               convergents[dist]['gdist'].append(dg)
+               convergents[dist]['rho'].append(np.array(rho))
+               convergents[dist]['alpha'].append(np.array(alpha))
+               convergents[dist]['jacoe'].append(np.array(jacoe))
+               convergents[dist]['jacou'].append(np.array(jacou))
+               convergents[dist]['jacovt'].append(np.array(jacovt))
                found = 1
                break
           if not found:
@@ -748,18 +754,29 @@ def explore(nrandom=1, kind=0, truestart=0, axes=[],
                    f"distgoal={dg}")
              convergents[dist] = {}
              convergents[dist]['repeats'] = 1
-             convergents[dist]['gdist'] = dg
-             convergents[dist]['rho'] = np.array(rho)
-             convergents[dist]['alpha'] = np.array(alpha)
+             convergents[dist]['gdist'] = [dg]
+             convergents[dist]['rho'] = [np.array(rho)]
+             convergents[dist]['alpha'] = [np.array(alpha)]
+             convergents[dist]['jacoe'] = [np.array(jacoe)]
+             convergents[dist]['jacou'] = [np.array(jacou)]
+             convergents[dist]['jacovt'] = [np.array(jacovt)]
              convergents[dist]['serial'] = i
           interactive = 1
           continue
+      if istep > 10:
+        dscale = abs(distances[istep - 1] - distances[istep]) * 1e-6
+        for i in range(2,10):
+          if abs(distances[istep - i] - distances[istep]) < dscale:
+            print("******WARNING******* ", end="")
+            print("cycling, let's go interactive")
+            interactive = 1
+            continue
       if istep > istop:
-          print("******WARNING******* ", end="")
-          print("cycling, let's go interactive")
-          interactive = 1
-          istop += 100
-          continue
+        print("******WARNING******* ", end="")
+        print("failed to converge, let's go interactive")
+        interactive = 1
+        istop += 100
+        continue
       
   rho = np.diag(np.ones([N], dtype=complex) * tracerho0/N)
   for i in range(nalpha):
