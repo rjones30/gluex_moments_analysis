@@ -588,6 +588,7 @@ def explore(nrandom=1, kind=0, truestart=0, axes=[],
                 dalpha *= 0
                 domega *= 0
                 istep = -1
+                istop = 100
                 break
               elif len(ans) > 2 and ans[:2] == 'r:':
                 sans = ans[2:].split('=')
@@ -806,3 +807,39 @@ def applyT(rho, LM=[]):
     rhot[[nplus,nminus],:] = rhot[[nminus,nplus],:] * (-1)**M
     rhot[:,[nplus,nminus]] = rhot[:,[nminus,nplus]] * (-1)**M
   return rhot
+
+def complete_the_squares(alpha, tracerho, kind=0):
+  Kinv = get_Kpseudoinverse()
+  sigma = get_SUNgenerators(kind=kind)
+  try:
+    global sigma_kind
+    if kind == sigma_kind:
+      d,f = dijk, fijk
+  except:
+    sigma_kind = kind
+    d,f = get_SUNtensors(sigma)
+  nsigma = len(sigma)
+  N = Ksigma[0].shape[0]
+  dprime = []
+  aprime = []
+  beta = []
+  for k in range(len(alpha)):
+    ev,uv = np.linalg.eigh(dijk[:,:,k])
+    ak = uv.T @ alpha - (1 - 2/N) * tracerho * uv[k]
+    dprime.append(ev)
+    aprime.append(ak)
+    beta.append(0.5 * ak @ np.diag(ev) @ ak)
+    constraint = (0.5 * np.einsum("i,ij,j", alpha, dijk[:,:,k], alpha)
+                 - (1 - 2/N) * tracerho * alpha[k])
+    if abs(constraint) > tracerho * 1e-12:
+      print("constraint equation {k} violated:", constraint / tracerho)
+  return dprime,aprime,beta
+
+def t1(k, pklfile="convergents.pkl"):
+  with open(pklfile, "rb") as fpkl:
+    aconvergents = pkl.load(fpkl)
+  dist = [d for d in sorted(aconvergents)]
+  alpha0 = aconvergents[dist[k]]['alpha']
+  tracerho = np.trace(aconvergents[dist[k]]['rho'][0])
+  print("tracerho is", tracerho)
+  return complete_the_squares(alpha0[0], tracerho)
